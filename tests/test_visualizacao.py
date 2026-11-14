@@ -43,3 +43,17 @@ def test_html_nao_quebra_com_script_no_nome():
     html = gerar_html(montar_dados(g, "x"))
     assert html.count("</script>") == 1          # só o fechamento do próprio script
     assert _extrair_json(html)["nos"] == ["</script><b>"]
+
+
+def test_lista_de_ciclos_nos_dados():
+    g = Digrafo({"a": {"b", "c"}, "b": {"a"}, "c": {"a"}})
+    d = montar_dados(g, "demo", ciclos=[["a", "b", "a"], ["a", "c", "a"]], ciclos_truncado=True)
+    assert d["ciclos"] == [["a", "b", "a"], ["a", "c", "a"]]
+    assert d["ciclos_truncado"] is True
+
+
+def test_um_ciclo_vira_lista_e_aciclico_e_lista_vazia():
+    g = Digrafo({"a": {"b"}, "b": {"a"}})
+    assert montar_dados(g, "x", ciclo=["a", "b", "a"])["ciclos"] == [["a", "b", "a"]]
+    assert montar_dados(g, "x", ciclos=[])["ciclos"] == []
+    assert montar_dados(g, "x")["ciclos"] is None

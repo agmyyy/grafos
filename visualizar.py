@@ -13,7 +13,7 @@ import argparse
 import webbrowser
 from pathlib import Path
 
-from src import ciclos, condensacao, scc
+from src import ciclos, condensacao, enumeracao, scc
 from src.extracao import construir_grafo
 from src.grafo import Digrafo
 from src.visualizacao import gerar_html, montar_dados
@@ -33,6 +33,8 @@ def main() -> None:
     ap.add_argument("projeto", help="pasta do projeto (raiz dos pacotes)")
     ap.add_argument("-o", "--saida", help="arquivo HTML de saída (padrão: saida/<pasta>.html)")
     ap.add_argument("--abrir", action="store_true", help="abre a página no navegador")
+    ap.add_argument("--limite-ciclos", type=int, default=50,
+                    help="máximo de ciclos listados na página (padrão: 50)")
     args = ap.parse_args()
 
     raiz = Path(args.projeto)
@@ -43,6 +45,11 @@ def main() -> None:
     print(f"{raiz.name}: {g.num_vertices()} módulos, {g.num_arcos()} dependências")
 
     ciclo = _tentar("encontrar_ciclo", ciclos.encontrar_ciclo, g)
+    lista = _tentar("encontrar_ciclos", enumeracao.encontrar_ciclos, g, args.limite_ciclos + 1)
+    truncado = lista is not None and len(lista) > args.limite_ciclos
+    if lista is not None:
+        lista = lista[: args.limite_ciclos]
+        print(f"ciclos listados: {len(lista)}" + (" (há mais; use --limite-ciclos)" if truncado else ""))
     sccs = _tentar("kosaraju", scc.kosaraju, g)
     g_cond = mapa = ordem = None
     if sccs is not None:
@@ -51,7 +58,7 @@ def main() -> None:
             g_cond, mapa = resultado
             ordem = _tentar("ordenacao_topologica", condensacao.ordenacao_topologica, g_cond)
 
-    dados = montar_dados(g, raiz.name, sccs, ciclo, g_cond, mapa, ordem)
+    dados = montar_dados(g, raiz.name, sccs, ciclo, g_cond, mapa, ordem, lista, truncado)
     destino = Path(args.saida) if args.saida else Path("saida") / f"{raiz.name}.html"
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(gerar_html(dados), encoding="utf-8")

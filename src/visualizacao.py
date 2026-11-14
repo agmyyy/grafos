@@ -19,6 +19,8 @@ def montar_dados(
     g_cond: Digrafo | None = None,
     mapa_scc: dict[str, int] | None = None,
     ordem_topologica: list[str] | None = None,
+    ciclos: list[list[str]] | None = None,
+    ciclos_truncado: bool = False,
 ) -> dict:
     """Converte os resultados da equipe no JSON que a página consome."""
     dados: dict = {
@@ -27,6 +29,9 @@ def montar_dados(
         "arcos": [list(a) for a in g.arcos()],
         "sccs": [sorted(c) for c in sccs] if sccs is not None else None,
         "ciclo": ciclo,
+        # lista de ciclos: None = não calculada; [] = grafo acíclico
+        "ciclos": ciclos if ciclos is not None else ([ciclo] if ciclo else None),
+        "ciclos_truncado": ciclos_truncado,
         "condensacao": None,
     }
     if g_cond is not None and mapa_scc is not None:
@@ -97,13 +102,15 @@ _MODELO = r"""<!DOCTYPE html>
   <div class="linha">
     <button id="bGrafo" class="ativo">Grafo</button>
     <button id="bCond">Condensação</button>
-    <button id="bCiclo">Mostrar ciclo concreto</button>
+    <button id="bCiclo">Destacar todos os ciclos</button>
     <button id="bRotulos" class="ativo">Rótulos</button>
     <button id="bAjustar">Ajustar tela</button>
   </div>
   <div id="avisos"></div>
   <h2>Selecionado</h2>
   <div id="info">Clique em um módulo para ver suas dependências.</div>
+  <h2>Ciclos encontrados</h2>
+  <div id="listaCiclos"></div>
   <h2>Componentes fortemente conexas</h2>
   <div id="listaScc"></div>
   <h2 id="tOrdem" style="display:none">Ordenação topológica</h2>
@@ -113,7 +120,7 @@ _MODELO = r"""<!DOCTYPE html>
     <div><span class="chip" style="background:#90a4ae"></span>módulo fora de componente cíclica</div>
     <div><span class="chip" style="background:#e53935"></span>cor forte: módulos de uma componente cíclica (uma cor por componente)</div>
     <div><span style="color:#d32f2f">━</span> arco dentro de componente cíclica &nbsp; <span style="color:#78909c">━</span> arco comum</div>
-    <div><span style="color:#ef6c00">━</span> ciclo concreto (botão acima)</div>
+    <div><span style="color:#ef6c00">━</span> ciclo destacado (clique num ciclo da lista)</div>
     <div>Ao selecionar: <span style="color:#1565c0">━</span> dependências diretas, <span style="color:#2e7d32">━</span> quem depende dele.</div>
     <div style="margin-top:6px;color:#777">Arco A → B: A importa B (A depende de B).</div>
   </div>
@@ -139,6 +146,7 @@ const svg = el("svg"), cena = el("cena"), defs = el("defs");
 let modo = "grafo";            // "grafo" | "cond"
 let selecionado = null;
 let mostrarCiclo = false, mostrarRotulos = true;
+let cicloAtivo = null;         // índice do ciclo escolhido na lista
 let termoBusca = "";
 let destaque = null;          // conjunto de módulos destacado (clique numa SCC)
 let vista = {x: 0, y: 0, k: 1};
@@ -188,6 +196,10 @@ function infoScc() {
   return {comp, ciclica, cor};
 }
 const SCC = infoScc();
+
+// ciclos: null = não calculados; [] = grafo acíclico
+const CICLOS = DADOS.ciclos || (DADOS.ciclo ? [DADOS.ciclo] : null);
+const ARCOS_CICLO = CICLOS ? CICLOS.map(c => new Set(c.slice(0, -1).map((u, i) => u + "\u0000" + c[i + 1]))) : null;
 
 // ---------- layout ----------
 function layoutForca(nos, arcos, L, A) {
@@ -263,8 +275,9 @@ function criar(tag, attrs, pai) {
   return e;
 }
 function marcador(id, cor) {
-  const m = criar("marker", {id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7,
-                             markerHeight: 7, orient: "auto-start-reverse"}, defs);
+  const m = criar("marker", {id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 11,
+                             markerHeight: 11, markerUnits: "userSpaceOnUse",
+                             orient: "auto-start-reverse"}, defs);
   criar("path", {d: "M0,0 L10,5 L0,10 z", fill: cor}, m);
 }
 function prepararMarcadores() {
@@ -305,10 +318,10 @@ function arcoCiclico(a) {
   return i === SCC.comp.get(a.v) && SCC.ciclica[i];
 }
 function arcoNoCiclo(a) {
-  const c = DADOS.ciclo;
-  if (modo !== "grafo" || !mostrarCiclo || !c) return false;
-  for (let i = 0; i + 1 < c.length; i++) if (c[i] === a.u && c[i + 1] === a.v) return true;
-  return false;
+  if (modo !== "grafo" || !ARCOS_CICLO) return false;
+  const k = a.u + "\u0000" + a.v;
+  if (cicloAtivo !== null) return ARCOS_CICLO[cicloAtivo].has(k);
+  return mostrarCiclo && ARCOS_CICLO.some(c => c.has(k));
 }
 
 function desenhar() {
@@ -331,6 +344,7 @@ function desenhar() {
       else if (a.v === sel) { cor = "#2e7d32"; mk = "m-entrada"; larg = 2.6; op = 1; }
       else op = 0.08;
     }
+    if (cicloAtivo !== null && !arcoNoCiclo(a)) op = Math.min(op, 0.08);
     if (arcoNoCiclo(a)) { cor = "#ef6c00"; mk = "m-ciclo"; larg = 4; op = 1; }
     const inverso = chave.has(a.v + "\u0000" + a.u);
     criar("path", {d: caminho(a, pos, inverso), fill: "none", stroke: cor, "stroke-width": larg,
@@ -407,7 +421,7 @@ function ligarCliques(raiz) {
 }
 
 function selecionar(id) {
-  selecionado = id; destaque = null; desenhar(); atualizarInfo();
+  selecionado = id; destaque = null; cicloAtivo = null; desenhar(); atualizarInfo();
 }
 
 function atualizarInfo() {
@@ -436,17 +450,39 @@ function atualizarInfo() {
   caixa.innerHTML = html; ligarCliques(caixa);
 }
 
+function escolherCiclo(i) {
+  if (modo !== "grafo") return;
+  if (cicloAtivo === i) { cicloAtivo = null; destaque = null; desenhar(); atualizarInfo(); return; }
+  cicloAtivo = i; selecionado = null; mostrarCiclo = false;
+  el("bCiclo").classList.remove("ativo");
+  termoBusca = ""; el("busca").value = "";
+  destaque = new Set(CICLOS[i]); desenhar();
+  el("info").innerHTML = `<b>Ciclo ${i + 1} de ${CICLOS.length}</b><br>${CICLOS[i].join(" → ")}`;
+}
+
 // ---------- painel lateral ----------
 function preencherPainel() {
   const av = el("avisos"), nosN = DADOS.nos.length, arcN = DADOS.arcos.length;
   el("resumo").textContent = `${nosN} módulos · ${arcN} dependências`;
   const avisos = [];
   if (!DADOS.sccs) avisos.push("SCCs não disponíveis (Kosaraju ainda não implementado ou não executado).");
-  if (!DADOS.ciclo && !DADOS.sccs) avisos.push("Detecção de ciclo concreto não disponível.");
+  if (!CICLOS) avisos.push("Detecção de ciclos não disponível (DFS ainda não implementado ou não executado).");
   if (!DADOS.condensacao) avisos.push("Condensação não disponível.");
   av.innerHTML = avisos.map(a => `<div class="aviso">${a}</div>`).join("");
   el("bCond").disabled = !DADOS.condensacao;
-  el("bCiclo").disabled = !DADOS.ciclo;
+  el("bCiclo").disabled = !CICLOS || CICLOS.length === 0;
+
+  const lc = el("listaCiclos");
+  if (!CICLOS) lc.innerHTML = "<i>indisponível</i>";
+  else if (CICLOS.length === 0) lc.innerHTML = '<span class="ok">Grafo acíclico: nenhum ciclo.</span>';
+  else {
+    const mais = DADOS.ciclos_truncado ? "+" : "";
+    let h = `<b class="ruim">${CICLOS.length}${mais} ciclo(s)</b>`;
+    if (DADOS.ciclos_truncado) h += " (lista limitada: existem mais ciclos)";
+    h += "<ul>" + CICLOS.map((c, i) => `<li class="clicavel" data-ciclo="${i}">${c.length - 1} módulo(s): ${c.join(" → ")}</li>`).join("") + "</ul>";
+    lc.innerHTML = h;
+    lc.querySelectorAll("li[data-ciclo]").forEach(li => li.addEventListener("click", () => escolherCiclo(+li.dataset.ciclo)));
+  }
 
   const ls = el("listaScc");
   if (!DADOS.sccs) { ls.innerHTML = "<i>indisponível</i>"; }
@@ -457,7 +493,7 @@ function preencherPainel() {
     h += "<ul>" + cicl.map(({c, i}) => `<li class="clicavel" data-scc="${i}"><span class="chip" style="background:${SCC.cor.get(i)}"></span>${c.length} módulo(s): ${c.join(", ")}</li>`).join("") + "</ul>";
     ls.innerHTML = h;
     ls.querySelectorAll("li[data-scc]").forEach(li => li.addEventListener("click", () => {
-      termoBusca = ""; el("busca").value = ""; selecionado = null;
+      termoBusca = ""; el("busca").value = ""; selecionado = null; cicloAtivo = null;
       destaque = new Set(DADOS.sccs[+li.dataset.scc]); desenhar(); atualizarInfo();
     }));
   }
@@ -470,7 +506,7 @@ function preencherPainel() {
 
 // ---------- botões ----------
 function trocarModo(m) {
-  modo = m; selecionado = null;
+  modo = m; selecionado = null; cicloAtivo = null; destaque = null;
   el("bGrafo").classList.toggle("ativo", m === "grafo");
   el("bCond").classList.toggle("ativo", m === "cond");
   el("bCiclo").style.display = m === "grafo" ? "" : "none";
@@ -486,11 +522,13 @@ function iniciarVisao(m) {
 }
 el("bGrafo").onclick = () => trocarModo("grafo");
 el("bCond").onclick = () => { if (DADOS.condensacao) trocarModo("cond"); };
-el("bCiclo").onclick = () => { mostrarCiclo = !mostrarCiclo; el("bCiclo").classList.toggle("ativo", mostrarCiclo); desenhar();
-  if (mostrarCiclo && DADOS.ciclo) el("info").innerHTML = "<b>Ciclo concreto:</b><br>" + DADOS.ciclo.join(" → "); };
+el("bCiclo").onclick = () => {
+  mostrarCiclo = !mostrarCiclo; cicloAtivo = null; destaque = null;
+  el("bCiclo").classList.toggle("ativo", mostrarCiclo); desenhar(); atualizarInfo();
+};
 el("bRotulos").onclick = () => { mostrarRotulos = !mostrarRotulos; el("bRotulos").classList.toggle("ativo", mostrarRotulos); desenhar(); };
 el("bAjustar").onclick = ajustar;
-el("busca").addEventListener("input", ev => { termoBusca = ev.target.value; destaque = null; desenhar(); });
+el("busca").addEventListener("input", ev => { termoBusca = ev.target.value; destaque = null; cicloAtivo = null; desenhar(); });
 window.addEventListener("resize", ajustar);
 
 prepararMarcadores(); preencherPainel(); iniciarVisao("grafo"); ajustar();

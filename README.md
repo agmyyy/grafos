@@ -8,22 +8,11 @@ projeto, monta um digrafo, detecta ciclos (DFS), decompõe em componentes fortem
 conexas (Kosaraju–Sharir), constrói a condensação com ordenação topológica e simula a
 remoção de dependências. Os algoritmos de grafos são implementados pela equipe.
 
-> **Estado atual:** base pronta (grafo, extração, visualização). Algoritmos das atividades
-> A, B, C e D ainda são esqueletos. Veja a seção [Histórico e estado](#histórico-e-estado).
-
 ---
 
 ## 1. Requisitos e instalação
 
-Python 3.10 ou mais novo. No CachyOS/Arch:
-
-```bash
-sudo pacman -S python python-pytest          # se ainda não tiver
-cd ~/Projetos/grafos
-python -m venv .venv
-source .venv/bin/activate                    # fish: source .venv/bin/activate.fish
-pip install pytest
-```
+Somente pytest.
 
 Não há dependências de execução além da biblioteca padrão do Python.
 
@@ -34,7 +23,7 @@ Não há dependências de execução além da biblioteca padrão do Python.
 ```
 grafos/
 ├── README.md                # este arquivo (atualizar a cada mudança)
-├── analisar.py              # CLI: extrai o grafo de um projeto e imprime as dependências
+├── analisar.py              # CLI: extrai o grafo, imprime dependências e ciclos (todos ou só um)
 ├── visualizar.py            # CLI: gera a página HTML de visualização
 ├── src/
 │   ├── __init__.py
@@ -43,11 +32,14 @@ grafos/
 │   ├── ciclos.py            # Atividade A: alcancaveis, tem_ciclo, encontrar_ciclo (DFS)
 │   ├── scc.py               # Atividade B: kosaraju, sccs_ciclicas
 │   ├── condensacao.py       # Atividade C: condensar, ordenacao_topologica
+│   ├── enumeracao.py        # encontrar_ciclos(g, limite): lista vários ciclos (para visualização e exemplos)
 │   ├── remocao.py           # Atividade D: simular_remocao
 │   └── visualizacao.py      # gera o HTML (só exibe; não calcula nada)
 ├── tests/
 │   ├── test_grafo.py        # testes do Digrafo
+│   ├── test_analisar.py     # testes da CLI analisar.py
 │   ├── test_ciclos.py       # testes do DFS e da detecção de ciclos
+│   ├── test_enumeracao.py   # testes da enumeração de ciclos
 │   ├── test_extracao.py     # testes do extrator de imports
 │   └── test_visualizacao.py # testes dos dados enviados à página
 ├── dados/                   # projetos de exemplo e projeto demonstrativo
@@ -58,13 +50,6 @@ grafos/
 │   └── realistic_app/
 └── saida/                   # páginas HTML geradas (ignorada pelo git)
 ```
-
-Responsáveis (proposta de divisão):
-
-- **Luis:** `grafo.py`, `extracao.py`, `scc.py`.
-- **Agmy:** `ciclos.py`, `condensacao.py`.
-- **Emanoel:** `remocao.py`, exemplos pequenos e projeto demo em `dados/`, testes e README.
-- **Relatório:** cada um escreve a seção dos seus algoritmos (correção e complexidade).
 
 ---
 
@@ -79,6 +64,7 @@ python -m pytest              # todos os testes
 python -m pytest -v           # detalhado (um teste por linha)
 python -m pytest tests/test_extracao.py          # só um arquivo
 python -m pytest tests/test_ciclos.py            # só os testes do DFS
+python -m pytest tests/test_enumeracao.py        # só os testes da enumeração de ciclos
 python -m pytest -k remover                      # só testes cujo nome contém "remover"
 ```
 
@@ -88,24 +74,23 @@ A pasta passada deve ser a **raiz dos pacotes**. Nos exemplos, é a pasta que co
 pacote (por exemplo `dados/cyclic_app/` contém `cyclic_app/`).
 
 ```bash
-python analisar.py dados/cyclic_app
-python analisar.py dados/realistic_app
+python analisar.py dados/cyclic_app                      # grafo + TODOS os ciclos
+python analisar.py dados/realistic_app --limite-ciclos 200   # muda o limite (padrão: 50)
+python analisar.py dados/cyclic_app --so-um-ciclo        # só a Atividade A: um ciclo
 ```
 
-Saída: número de módulos e dependências, a lista `módulo -> [dependências diretas]` e o
-resumo do DFS (se há dependência circular, o caminho do ciclo e quantos módulos envolve).
-Usando no código:
+Saída em todos os modos: número de módulos e dependências e a lista
+`módulo -> [dependências diretas]`. Depois:
 
-```python
-from pathlib import Path
-from src.extracao import construir_grafo
-from src.grafo import Digrafo
+- **Modo padrão:** todos os ciclos, até o limite (`src/enumeracao.py`), cada um com o
+  número de módulos. Se houver mais ciclos que o limite, avisa. Grafo acíclico: avisa.
+- **`--so-um-ciclo`:** roda **apenas** `ciclos.encontrar_ciclo` (a DFS da Atividade A,
+  O(V + E)) e imprime um ciclo no mesmo formato da lista do modo padrão. A DFS para no
+  primeiro ciclo encontrado.
 
-g = Digrafo(construir_grafo(Path("dados/cyclic_app")))
-print(g.vizinhos("cyclic_app.direct.mod_a"))
-```
-
-Projeto com layout `src/` (ex.: `meu_projeto/src/pacote/...`): passe `meu_projeto/src`.
+Cada ciclo é impresso com o primeiro módulo repetido no fim, para mostrar que ele "fecha":
+`a ➔ b ➔ c ➔ a` tem **3 módulos** e **3 dependências** (a→b, b→c, c→a). Em um ciclo simples,
+o número de módulos é sempre igual ao de dependências.
 
 ### 3.3 Visualizar no navegador
 
@@ -113,13 +98,8 @@ Projeto com layout `src/` (ex.: `meu_projeto/src/pacote/...`): passe `meu_projet
 python visualizar.py dados/cyclic_app                 # gera saida/cyclic_app.html
 python visualizar.py dados/realistic_app --abrir      # gera e abre no navegador
 python visualizar.py dados/cyclic_app -o saida/demo.html
+python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 ciclos (padrão: 50)
 ```
-
-Se preferir, abra o arquivo manualmente: `xdg-open saida/cyclic_app.html`.
-A página funciona offline (um único arquivo, sem bibliotecas externas).
-
-O script usa os algoritmos da equipe **à medida que forem implementados**. O que ainda
-levanta `NotImplementedError` é omitido, com um aviso no terminal e na página.
 
 ---
 
@@ -137,8 +117,10 @@ levanta `NotImplementedError` é omitido, com um aviso no terminal e na página.
   Módulos fora de ciclo ficam cinza.
 - **Componentes fortemente conexas:** lista das SCCs; clique em uma para destacar seus
   membros. _(precisa de `kosaraju`)_
-- **Mostrar ciclo concreto:** destaca em laranja o ciclo devolvido por
-  `encontrar_ciclo`. _(precisa de `encontrar_ciclo`)_
+- **Ciclos encontrados:** lista de ciclos do projeto; clique em um para destacá-lo em
+  laranja (clique de novo para limpar). "Destacar todos os ciclos" pinta de uma vez todos
+  os arcos que participam de algum ciclo. Se o grafo é acíclico, a página avisa.
+  _(precisa de `encontrar_ciclo` e/ou `encontrar_ciclos`)_
 - **Condensação:** alterna para o grafo de componentes, organizado em colunas pela
   ordenação topológica (dependentes à esquerda, dependências à direita), com a ordem
   listada ao lado. _(precisa de `kosaraju`, `condensar` e `ordenacao_topologica`)_
@@ -199,18 +181,19 @@ acrescenta O(E log E) no pior caso, sem afetar a correção.
 - **`src/ciclos.py` (Atividade A, pronta):** `alcancaveis(g, origem)`, `tem_ciclo(g)` e
   `encontrar_ciclo(g)`. O DFS é iterativo (sem limite de recursão) e aceita `Digrafo` ou
   `dict[str, set[str]]`. O ciclo devolvido fecha no mesmo vértice, por exemplo
-  `['a', 'b', 'a']`. `imprimir_resultado_dfs` resume o resultado no terminal.
+  `['a', 'b', 'a']`. `imprimir_resultado_dfs` (mantida no arquivo) imprime um resumo do DFS, mas o
+  `analisar.py` usa agora o próprio formato, igual nos dois modos.
+- **`src/enumeracao.py` (apoio à visualização e aos exemplos):** `encontrar_ciclos(g, limite=50)`
+  devolve até `limite` ciclos elementares, cada um uma vez, começando pelo menor vértice.
+  O número de ciclos pode ser **exponencial**, então o limite é obrigatório e o custo não
+  é O(V + E) (é proporcional ao número de ciclos devolvidos). Para apenas detectar, use
+  `encontrar_ciclo`, que é O(V + E).
 - **`src/scc.py` (Atividade B):** `kosaraju(g)` devolve a lista de SCCs; `sccs_ciclicas`
   filtra as que têm ciclo (mais de um vértice, ou um vértice com laço).
 - **`src/condensacao.py` (Atividade C):** `condensar(g, sccs)` devolve o grafo de
   condensação e o mapa vértice → índice da SCC; `ordenacao_topologica(g_cond)` ordena o DAG.
 - **`src/remocao.py` (Atividade D):** `simular_remocao(g, u, v)` remove o arco numa
   **cópia** e compara ciclos e SCCs antes e depois.
-
-Cada função tem assinatura e docstring prontas, lançando `NotImplementedError` até ser
-implementada. Ao implementar, **não altere as assinaturas** sem avisar o grupo, e
-escreva testes em `tests/` com grafos feitos à mão, por exemplo
-`Digrafo({"a": {"b"}, "b": {"a"}})`.
 
 ---
 
@@ -224,6 +207,7 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [x] Extração de imports (`src/extracao.py`)
 - [x] Visualização (`src/visualizacao.py`, `visualizar.py`)
 - [x] Atividade A: `alcancaveis`, `tem_ciclo`, `encontrar_ciclo` (`src/ciclos.py`)
+- [x] Enumeração de ciclos (`src/enumeracao.py`)
 - [ ] Atividade B: `kosaraju`, `sccs_ciclicas` (`src/scc.py`)
 - [ ] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
 - [ ] Atividade D: `simular_remocao` (`src/remocao.py`)
@@ -239,16 +223,17 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
   ciclo concreto e condensação.
   Rodar: `python visualizar.py dados/cyclic_app --abrir`. Os recursos que dependem de
   algoritmos ainda não implementados aparecem desativados.
-- **DFS e detecção de ciclos (Agmy).** `ciclos.py` implementado, métodos novos em `Digrafo`
+- **DFS e detecção de ciclos.** `ciclos.py` implementado, métodos novos em `Digrafo`
   e `analisar.py` com resumo do DFS. Com isso, o botão "Mostrar ciclo concreto" da
   visualização passa a funcionar.
   Rodar: `python -m pytest tests/test_ciclos.py` e `python analisar.py dados/cyclic_app`.
+- **Lista de ciclos na visualização.** `src/enumeracao.py` (`encontrar_ciclos`) e painel
+  "Ciclos encontrados" na página, com destaque de cada ciclo.
+  Rodar: `python -m pytest tests/test_enumeracao.py` e
+  `python visualizar.py dados/cyclic_app --abrir`.
+- **`analisar.py` com todos os ciclos.** Por padrão lista todos os ciclos (até o limite);
+  `--so-um-ciclo` roda só o `encontrar_ciclo` da Atividade A.
+  Rodar: `python analisar.py dados/cyclic_app` e
+  `python analisar.py dados/cyclic_app --so-um-ciclo`.
 
----
-
-## Créditos
-
-A ideia de extrair dependências com `ast` e parte da lógica de resolução de imports
-relativos se baseiam no projeto **DepCycle** (MIT, Copyright (c) 2025 Kishan Thanki).
-Os algoritmos de grafos (DFS, Kosaraju–Sharir, condensação, ordenação topológica,
-simulação de remoções) são de autoria da equipe.
+  Extração de imports baseada na ideia do DepCycle (MIT, Copyright (c) 2025 Kishan Thanki).
