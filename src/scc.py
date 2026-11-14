@@ -1,4 +1,4 @@
-"""Atividade B: Kosaraju–Sharir."""
+"""Atividade B: Kosaraju–Sharir.  (Responsável: Luis)"""
 
 from src.grafo import Digrafo
 
