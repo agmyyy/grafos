@@ -24,6 +24,34 @@ def alcancaveis(g: GraphType, origem: str) -> set[str]:
     return _to_digraph(g).alcancaveis(origem)
 
 
+def imprimir_resultado_dfs(
+    grafo: dict[str, set[str]], ciclo: list[str] | None
+) -> None:
+    """Imprime um resumo do grafo e o resultado da detecção de ciclos."""
+    vertices = set(grafo)
+    for destinations in grafo.values():
+        vertices.update(destinations)
+
+    total_edges = sum(len(destinations) for destinations in grafo.values())
+
+    print("=== Resumo da análise DFS ===")
+    print(f"Total de nós: {len(vertices)}")
+    print(f"Total de arestas: {total_edges}")
+
+    if ciclo is not None:
+        cycle_nodes = set(ciclo)
+        cycle_edge_count = max(len(ciclo) - 1, 0)
+        cycle_path = " ➔ ".join(ciclo) if ciclo else "(caminho vazio)"
+
+        print("\n Dependência circular detectada!")
+        print(f"Caminho do ciclo: {cycle_path}")
+        print(f"Módulos envolvidos: {len(cycle_nodes)}")
+        print(f"Dependências envolvidas: {cycle_edge_count}")
+        return
+
+    print("Nenhum ciclo foi encontrado; o grafo é acíclico neste escopo.")
+
+
 def tem_ciclo(g: GraphType) -> bool:
     """Indica se existe algum ciclo direcionado no grafo (DFS em O(V + E))."""
     return encontrar_ciclo(g) is not None

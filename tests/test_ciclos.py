@@ -1,6 +1,6 @@
 """Testes da busca em profundidade e da detecção de ciclos."""
 
-from src.ciclos import encontrar_ciclo, tem_ciclo
+from src.ciclos import encontrar_ciclo, imprimir_resultado_dfs, tem_ciclo
 
 
 def _assert_valid_cycle(graph: dict[str, set[str]], cycle: list[str] | None) -> None:
@@ -54,3 +54,34 @@ def test_multiple_or_cross_edges_return_a_valid_cycle() -> None:
 
     assert tem_ciclo(graph) is True
     _assert_valid_cycle(graph, cycle)
+
+
+def test_print_dfs_summary_without_cycle(capsys) -> None:
+    graph = {"A": {"B"}, "C": set()}
+
+    imprimir_resultado_dfs(graph, None)
+
+    output = capsys.readouterr().out
+    assert "Total de nós: 3" in output
+    assert "Total de arestas: 1" in output
+    assert "Nenhum ciclo foi encontrado" in output
+    assert "acíclico" in output
+
+
+def test_print_dfs_summary_with_cycle(capsys) -> None:
+    graph = {
+        "A": {"B"},
+        "B": {"C"},
+        "C": {"A"},
+    }
+    cycle = ["A", "B", "C", "A"]
+
+    imprimir_resultado_dfs(graph, cycle)
+
+    output = capsys.readouterr().out
+    assert "Total de nós: 3" in output
+    assert "Total de arestas: 3" in output
+    assert "Dependência circular detectada" in output
+    assert "A ➔ B ➔ C ➔ A" in output
+    assert "Módulos envolvidos: 3" in output
+    assert "Dependências envolvidas: 3" in output
