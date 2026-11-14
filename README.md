@@ -47,6 +47,7 @@ grafos/
 │   └── visualizacao.py      # gera o HTML (só exibe; não calcula nada)
 ├── tests/
 │   ├── test_grafo.py        # testes do Digrafo
+│   ├── test_ciclos.py       # testes do DFS e da detecção de ciclos
 │   ├── test_extracao.py     # testes do extrator de imports
 │   └── test_visualizacao.py # testes dos dados enviados à página
 ├── dados/                   # projetos de exemplo e projeto demonstrativo
@@ -77,6 +78,7 @@ Sempre a partir da raiz do repositório, com o ambiente virtual ativo.
 python -m pytest              # todos os testes
 python -m pytest -v           # detalhado (um teste por linha)
 python -m pytest tests/test_extracao.py          # só um arquivo
+python -m pytest tests/test_ciclos.py            # só os testes do DFS
 python -m pytest -k remover                      # só testes cujo nome contém "remover"
 ```
 
@@ -90,7 +92,8 @@ python analisar.py dados/cyclic_app
 python analisar.py dados/realistic_app
 ```
 
-Saída: número de módulos e dependências, e a lista `módulo -> [dependências diretas]`.
+Saída: número de módulos e dependências, a lista `módulo -> [dependências diretas]` e o
+resumo do DFS (se há dependência circular, o caminho do ciclo e quantos módulos envolve).
 Usando no código:
 
 ```python
@@ -133,12 +136,12 @@ levanta `NotImplementedError` é omitido, com um aviso no terminal e na página.
 - **Cores:** cada componente cíclica tem uma cor; setas internas a ela ficam vermelhas.
   Módulos fora de ciclo ficam cinza.
 - **Componentes fortemente conexas:** lista das SCCs; clique em uma para destacar seus
-  membros. *(precisa de `kosaraju`)*
+  membros. _(precisa de `kosaraju`)_
 - **Mostrar ciclo concreto:** destaca em laranja o ciclo devolvido por
-  `encontrar_ciclo`. *(precisa de `encontrar_ciclo`)*
+  `encontrar_ciclo`. _(precisa de `encontrar_ciclo`)_
 - **Condensação:** alterna para o grafo de componentes, organizado em colunas pela
   ordenação topológica (dependentes à esquerda, dependências à direita), com a ordem
-  listada ao lado. *(precisa de `kosaraju`, `condensar` e `ordenacao_topologica`)*
+  listada ao lado. _(precisa de `kosaraju`, `condensar` e `ordenacao_topologica`)_
 
 Para usar na apresentação e no relatório, gere uma página por exemplo
 (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas, projeto demo) e tire capturas.
@@ -175,6 +178,8 @@ g.vertices()          # ['a', 'b', 'c']   (ordem alfabética, determinística)
 g.vizinhos("a")       # ['b']             dependências diretas
 g.tem_arco("a", "b")  # True
 g.adicionar_arco("c", "d");  g.remover_arco("c", "d")
+g.vizinhos_entrada("b")  # quem depende de "b" (dependentes diretos)
+g.alcancaveis("a")     # tudo que "a" alcança por um ou mais arcos
 g.transposto()        # grafo com arcos invertidos (Kosaraju)
 g.copia()             # cópia independente (simulação de remoções)
 ```
@@ -191,8 +196,10 @@ acrescenta O(E log E) no pior caso, sem afetar a correção.
 
 ## 7. Onde cada algoritmo vai
 
-- **`src/ciclos.py` (Atividade A):** `alcancaveis(g, origem)`, `tem_ciclo(g)` e
-  `encontrar_ciclo(g)`, todos por DFS.
+- **`src/ciclos.py` (Atividade A, pronta):** `alcancaveis(g, origem)`, `tem_ciclo(g)` e
+  `encontrar_ciclo(g)`. O DFS é iterativo (sem limite de recursão) e aceita `Digrafo` ou
+  `dict[str, set[str]]`. O ciclo devolvido fecha no mesmo vértice, por exemplo
+  `['a', 'b', 'a']`. `imprimir_resultado_dfs` resume o resultado no terminal.
 - **`src/scc.py` (Atividade B):** `kosaraju(g)` devolve a lista de SCCs; `sccs_ciclicas`
   filtra as que têm ciclo (mais de um vértice, ou um vértice com laço).
 - **`src/condensacao.py` (Atividade C):** `condensar(g, sccs)` devolve o grafo de
@@ -207,45 +214,6 @@ escreva testes em `tests/` com grafos feitos à mão, por exemplo
 
 ---
 
-## 8. DepCycle como ferramenta auxiliar
-
-O [DepCycle](https://pypi.org/project/depcycle/) (MIT) é um analisador de dependências de
-projetos Python. A extração de imports deste trabalho se inspira nele. Ele também serve
-como ferramenta externa para **conferir** os resultados e gerar visualizações extras
-(os algoritmos centrais continuam sendo da equipe):
-
-```bash
-pip install depcycle                                   # fora do requisito do projeto
-depcycle analyze dados/cyclic_app -o saida/depcycle_cyclic.html     # página interativa
-depcycle analyze dados/cyclic_app --format json -o saida/cyclic.json
-depcycle analyze dados/cyclic_app --format dot  -o saida/cyclic.dot # Graphviz: dot -Tpng
-depcycle inspect dados/cyclic_app --cycles             # lista os ciclos no terminal
-depcycle inspect dados/cyclic_app cyclic_app.direct.mod_a   # dependências de um módulo
-depcycle analyze dados/cyclic_app --fail-on-cycles     # sai com erro se houver ciclo
-depcycle analyze dados/cyclic_app --no-stdlib --no-third-party --no-unknown
-```
-
-Uso sugerido: comparar os ciclos do `depcycle inspect --cycles` com os do nosso DFS e as
-SCCs do nosso Kosaraju. Diferenças indicam bug ou diferença de modelo (o DepCycle, por
-exemplo, não cria arcos para submódulos em `from pkg import mod`), e vale uma nota no
-relatório. Os arquivos `.dot` podem ser convertidos em imagem se o Graphviz estiver
-instalado (`sudo pacman -S graphviz`).
-
----
-
-## 9. Fluxo de trabalho com git
-
-```bash
-git checkout -b feature/nome-do-bloco     # uma branch por bloco
-git add <arquivos> && git commit -m "mensagem"
-git push -u origin feature/nome-do-bloco  # depois, abrir Pull Request
-git pull origin main                      # antes de começar a trabalhar
-```
-
-Ninguém commita direto na `main`; outro integrante revisa cada Pull Request.
-
----
-
 ## Histórico e estado
 
 Atualize esta seção a cada mudança que altere como rodar o projeto.
@@ -255,7 +223,7 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [x] `Digrafo` (`src/grafo.py`)
 - [x] Extração de imports (`src/extracao.py`)
 - [x] Visualização (`src/visualizacao.py`, `visualizar.py`)
-- [ ] Atividade A: `alcancaveis`, `tem_ciclo`, `encontrar_ciclo` (`src/ciclos.py`)
+- [x] Atividade A: `alcancaveis`, `tem_ciclo`, `encontrar_ciclo` (`src/ciclos.py`)
 - [ ] Atividade B: `kosaraju`, `sccs_ciclicas` (`src/scc.py`)
 - [ ] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
 - [ ] Atividade D: `simular_remocao` (`src/remocao.py`)
@@ -271,6 +239,10 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
   ciclo concreto e condensação.
   Rodar: `python visualizar.py dados/cyclic_app --abrir`. Os recursos que dependem de
   algoritmos ainda não implementados aparecem desativados.
+- **DFS e detecção de ciclos (Agmy).** `ciclos.py` implementado, métodos novos em `Digrafo`
+  e `analisar.py` com resumo do DFS. Com isso, o botão "Mostrar ciclo concreto" da
+  visualização passa a funcionar.
+  Rodar: `python -m pytest tests/test_ciclos.py` e `python analisar.py dados/cyclic_app`.
 
 ---
 

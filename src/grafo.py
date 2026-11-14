@@ -37,7 +37,40 @@ class Digrafo:
 
     def vizinhos(self, u: str) -> list[str]:
         """Dependências diretas de u, em ordem alfabética. O(grau log grau)."""
-        return sorted(self.adj[u])
+        return self.vizinhos_saida(u)
+
+    def vizinhos_saida(self, vertex: str) -> list[str]:
+        """Retorna os destinos dos arcos que saem de um vértice."""
+        return sorted(self.adj.get(vertex, set()))
+
+    def vizinhos_entrada(self, target: str) -> list[str]:
+        """Retorna, em ordem alfabética, os vértices que apontam para target."""
+        return sorted(
+            source
+            for source, destinations in self.adj.items()
+            if target in destinations
+        )
+
+    def alcancaveis(self, source: str) -> set[str]:
+        """Retorna os vértices alcançáveis a partir de source por um ou mais arcos.
+
+        A origem só aparece no resultado se existir um caminho de volta até ela.
+        """
+        if source not in self.adj:
+            return set()
+
+        reached: set[str] = set()
+        pending = list(self.adj[source])
+
+        while pending:
+            vertex = pending.pop()
+            if vertex in reached:
+                continue
+
+            reached.add(vertex)
+            pending.extend(self.adj.get(vertex, set()))
+
+        return reached
 
     def tem_arco(self, u: str, v: str) -> bool:
         """O(1) esperado."""

@@ -5,3 +5,5 @@ saida/
 .pytest_cache/
 .idea/
 .vscode/
+AGENTS.md
+opencode.json
