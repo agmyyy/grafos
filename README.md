@@ -120,10 +120,6 @@ python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 
   na Atividade B).
 - **Cores:** cada componente cíclica tem uma cor; setas internas a ela ficam vermelhas.
   Módulos fora de ciclo ficam cinza.
-- **Componentes fortemente conexas:** lista as SCCs; clique em uma para destacar seus
-  membros. Também identifica SCCs cíclicas e distingue seus membros de módulos externos
-  que apenas alcançam um ciclo. Recurso implementado por `kosaraju` e pelos classificadores
-  de SCCs em `src/scc.py`.
 - **Ciclos encontrados:** lista de ciclos do projeto; clique em um para destacá-lo em
   laranja (clique de novo para limpar). "Destacar todos os ciclos" pinta de uma vez todos
   os arcos que participam de algum ciclo. Se o grafo é acíclico, a página avisa.
