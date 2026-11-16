@@ -1,4 +1,4 @@
-"""Atividade B: Kosaraju–Sharir."""
+"""Atividade B: Kosaraju Sharir."""
 """Componentes fortemente conexas e análise de dependências cíclicas."""
 
 from src.grafo import Digrafo

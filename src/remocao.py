@@ -1,4 +1,4 @@
-"""Atividade D: simulação de remoção de dependências."""
+"""Atividade D: simulação de remoção de dependências.  (Responsável: Emanoel)"""
 
 from src.grafo import Digrafo
 

@@ -1,5 +1,8 @@
 """Extração de dependências entre módulos de um projeto Python.
 
+Baseado na ideia do projeto depcycle (MIT, Copyright (c) 2025 Kishan Thanki),
+reescrito para o contrato da equipe: dict[str, set[str]].
+
 MODELO (documentar no relatório):
 - Vértice = módulo (arquivo .py). __init__.py representa o pacote.
 - Arco A -> B: A importa B, com B interno ao projeto.
@@ -17,17 +20,8 @@ import ast
 from pathlib import Path
 
 EXCLUIDOS_PADRAO = {
-    "venv",
-    ".venv",
-    "env",
-    "__pycache__",
-    ".git",
-    "node_modules",
-    "build",
-    "dist",
-    ".tox",
-    ".mypy_cache",
-    ".pytest_cache",
+    "venv", ".venv", "env", "__pycache__", ".git", "node_modules",
+    "build", "dist", ".tox", ".mypy_cache", ".pytest_cache",
 }
 
 

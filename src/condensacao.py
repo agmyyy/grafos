@@ -1,4 +1,4 @@
-"""Atividade C: condensação e ordenação topológica."""
+"""Atividade C: condensação e ordenação topológica.  (Responsável: Agmy)"""
 
 from src.grafo import Digrafo
 
