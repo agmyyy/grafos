@@ -41,6 +41,7 @@ grafos/
 │   ├── test_ciclos.py       # testes do DFS e da detecção de ciclos
 │   ├── test_enumeracao.py   # testes da enumeração de ciclos
 │   ├── test_extracao.py     # testes do extrator de imports
+│   ├── test_scc.py          # testes das componentes fortemente conexas
 │   └── test_visualizacao.py # testes dos dados enviados à página
 ├── dados/                   # projetos de exemplo e projeto demonstrativo
 │   ├── basic_app/           # (exemplos vindos do depcycle)
@@ -65,6 +66,7 @@ python -m pytest -v           # detalhado (um teste por linha)
 python -m pytest tests/test_extracao.py          # só um arquivo
 python -m pytest tests/test_ciclos.py            # só os testes do DFS
 python -m pytest tests/test_enumeracao.py        # só os testes da enumeração de ciclos
+python -m pytest tests/test_scc.py              # só os testes de SCCs
 python -m pytest -k remover                      # só testes cujo nome contém "remover"
 ```
 
@@ -84,9 +86,12 @@ Saída em todos os modos: número de módulos e dependências e a lista
 
 - **Modo padrão:** todos os ciclos, até o limite (`src/enumeracao.py`), cada um com o
   número de módulos. Se houver mais ciclos que o limite, avisa. Grafo acíclico: avisa.
-- **`--so-um-ciclo`:** roda **apenas** `ciclos.encontrar_ciclo` (a DFS da Atividade A,
-  O(V + E)) e imprime um ciclo no mesmo formato da lista do modo padrão. A DFS para no
-  primeiro ciclo encontrado.
+- **`--so-um-ciclo`:** roda **apenas** `ciclos.encontrar_ciclo` para a busca de ciclos
+  (DFS da Atividade A, O(V + E)) e imprime um ciclo no mesmo formato da lista do modo
+  padrão. A DFS para no primeiro ciclo encontrado.
+- **Em ambos os modos:** também lista as componentes fortemente conexas (SCCs), indica
+  quais são cíclicas e separa os módulos que pertencem a ciclos daqueles que apenas
+  alcançam uma componente cíclica.
 
 Cada ciclo é impresso com o primeiro módulo repetido no fim, para mostrar que ele "fecha":
 `a ➔ b ➔ c ➔ a` tem **3 módulos** e **3 dependências** (a→b, b→c, c→a). Em um ciclo simples,
@@ -115,8 +120,10 @@ python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 
   na Atividade B).
 - **Cores:** cada componente cíclica tem uma cor; setas internas a ela ficam vermelhas.
   Módulos fora de ciclo ficam cinza.
-- **Componentes fortemente conexas:** lista das SCCs; clique em uma para destacar seus
-  membros. _(precisa de `kosaraju`)_
+- **Componentes fortemente conexas:** lista as SCCs; clique em uma para destacar seus
+  membros. Também identifica SCCs cíclicas e distingue seus membros de módulos externos
+  que apenas alcançam um ciclo. Recurso implementado por `kosaraju` e pelos classificadores
+  de SCCs em `src/scc.py`.
 - **Ciclos encontrados:** lista de ciclos do projeto; clique em um para destacá-lo em
   laranja (clique de novo para limpar). "Destacar todos os ciclos" pinta de uma vez todos
   os arcos que participam de algum ciclo. Se o grafo é acíclico, a página avisa.
@@ -208,7 +215,7 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [x] Visualização (`src/visualizacao.py`, `visualizar.py`)
 - [x] Atividade A: `alcancaveis`, `tem_ciclo`, `encontrar_ciclo` (`src/ciclos.py`)
 - [x] Enumeração de ciclos (`src/enumeracao.py`)
-- [ ] Atividade B: `kosaraju`, `sccs_ciclicas` (`src/scc.py`)
+- [x] Atividade B: `kosaraju`, `sccs_ciclicas` e análise da relação com ciclos (`src/scc.py`)
 - [ ] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
 - [ ] Atividade D: `simular_remocao` (`src/remocao.py`)
 - [ ] Exemplos pequenos (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas)
@@ -231,6 +238,11 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
   "Ciclos encontrados" na página, com destaque de cada ciclo.
   Rodar: `python -m pytest tests/test_enumeracao.py` e
   `python visualizar.py dados/cyclic_app --abrir`.
+- **Componentes fortemente conexas.** `src/scc.py` implementa Kosaraju-Sharir,
+  identifica componentes cíclicas (incluindo laços) e distingue módulos que pertencem a
+  ciclos daqueles que apenas alcançam uma SCC cíclica. A CLI lista as SCCs e a visualização
+  permite destacar seus membros.
+  Rodar: `python -m pytest tests/test_scc.py` e `python analisar.py dados/cyclic_app`.
 - **`analisar.py` com todos os ciclos.** Por padrão lista todos os ciclos (até o limite);
   `--so-um-ciclo` roda só o `encontrar_ciclo` da Atividade A.
   Rodar: `python analisar.py dados/cyclic_app` e
