@@ -1,4 +1,4 @@
-"""Extrai o grafo de dependências de um projeto e analisa seus ciclos.
+"""Uso: python analisar.py <pasta_do_projeto> (mostra grafo, ciclos e SCCs).
 
 Uso:
     python analisar.py <pasta>                       # grafo + TODOS os ciclos (até o limite)
@@ -15,6 +15,7 @@ from src.ciclos import encontrar_ciclo
 from src.enumeracao import encontrar_ciclos
 from src.extracao import construir_grafo
 from src.grafo import Digrafo
+from src.scc import analisar_relacao_ciclo, classificar_sccs, encontrar_sccs
 
 
 def _linha_ciclo(i: int, ciclo: list[str]) -> str:
@@ -77,6 +78,29 @@ def main(argv: list[str] | None = None) -> None:
         _imprimir_um(graph)
     else:
         _imprimir_todos(graph, args.limite_ciclos)
+
+    components = encontrar_sccs(graph)
+    classifications = classificar_sccs(graph, components)
+    relation = analisar_relacao_ciclo(graph, components)
+
+    print("\n=== Componentes fortemente conexas ===")
+    for classification in classifications:
+        status = "cíclica" if classification["eh_ciclica"] else "acíclica / trivial"
+        vertices = ", ".join(classification["vertices"])
+        print(
+            f"SCC {classification['id']}: [{vertices}] "
+            f"(tamanho: {classification['tamanho']}, {status})"
+        )
+
+    print("\n=== Relação com componentes cíclicas ===")
+    print(
+        "Nós que pertencem a SCCs cíclicas: "
+        f"{', '.join(sorted(relation['pertencem_a_scc_ciclica'])) or 'nenhum'}"
+    )
+    print(
+        "Nós externos que alcançam SCCs cíclicas: "
+        f"{', '.join(sorted(relation['alcancam_scc_ciclica_sem_pertencer'])) or 'nenhum'}"
+    )
 
 
 if __name__ == "__main__":
