@@ -9,7 +9,8 @@ def _normalizar_grafo(grafo: dict[str, set[str]]) -> dict[str, set[str]]:
     vertices = set(grafo)
     for destinos in grafo.values():
         vertices.update(destinos)
-    return {vertice: set(grafo.get(vertice, set())) for vertice in vertices}
+    # sorted: a ordem das SCCs não pode depender do hash das strings (ver README, seção 7)
+    return {vertice: set(grafo.get(vertice, set())) for vertice in sorted(vertices)}
 
 
 def encontrar_sccs(grafo: dict[str, set[str]]) -> list[set[str]]:
@@ -27,7 +28,7 @@ def encontrar_sccs(grafo: dict[str, set[str]]) -> list[set[str]]:
             continue
 
         visitados.add(inicio)
-        pilha_dfs = [(inicio, iter(adjacencias[inicio]))]
+        pilha_dfs = [(inicio, iter(sorted(adjacencias[inicio])))]
         while pilha_dfs:
             vertice, vizinhos = pilha_dfs[-1]
             try:
@@ -39,7 +40,7 @@ def encontrar_sccs(grafo: dict[str, set[str]]) -> list[set[str]]:
 
             if vizinho not in visitados:
                 visitados.add(vizinho)
-                pilha_dfs.append((vizinho, iter(adjacencias[vizinho])))
+                pilha_dfs.append((vizinho, iter(sorted(adjacencias[vizinho]))))
 
     transposto = Digrafo(adjacencias).transposto().adj
     visitados.clear()

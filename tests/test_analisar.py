@@ -43,3 +43,37 @@ def test_grafo_aciclico(tmp_path, capsys):
     (tmp_path / "y.py").write_text("import x\n")
     main([str(tmp_path)])
     assert "Nenhum ciclo foi encontrado" in capsys.readouterr().out
+
+
+def test_alcancaveis(tmp_path, capsys):
+    main([str(_projeto(tmp_path)), "--alcancaveis", "app.b"])
+    saida = capsys.readouterr().out
+    assert "=== Alcançáveis a partir de app.b ===" in saida
+    assert "app.a" in saida and "app.c" in saida          # b -> a -> {b, c}
+    assert "=== Ciclos" not in saida
+
+
+def test_alcancaveis_modulo_inexistente(tmp_path):
+    try:
+        main([str(_projeto(tmp_path)), "--alcancaveis", "nao.existe"])
+    except SystemExit:
+        return
+    raise AssertionError("deveria sair com erro")
+
+
+def test_so_um_ciclo_nao_roda_o_kosaraju(tmp_path, capsys):
+    main([str(_projeto(tmp_path)), "--so-um-ciclo"])
+    assert "Componentes fortemente conexas" not in capsys.readouterr().out
+
+
+def test_so_sccs_roda_apenas_o_kosaraju(tmp_path, capsys):
+    main([str(_projeto(tmp_path)), "--so-sccs"])
+    saida = capsys.readouterr().out
+    assert "=== Componentes fortemente conexas ===" in saida
+    assert "=== Ciclos" not in saida and "=== Ciclo (" not in saida
+
+
+def test_padrao_mostra_ciclos_e_sccs(tmp_path, capsys):
+    main([str(_projeto(tmp_path))])
+    saida = capsys.readouterr().out
+    assert "=== Ciclos (todos" in saida and "=== Componentes fortemente conexas ===" in saida

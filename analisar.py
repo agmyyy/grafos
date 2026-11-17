@@ -4,6 +4,8 @@ Uso:
     python analisar.py <pasta>                       # grafo + TODOS os ciclos (até o limite)
     python analisar.py <pasta> --limite-ciclos 200   # muda o limite (padrão: 50)
     python analisar.py <pasta> --so-um-ciclo         # só a Atividade A: um ciclo (DFS, O(V + E))
+    python analisar.py <pasta> --so-sccs             # só a Atividade B: SCCs (Kosaraju–Sharir)
+    python analisar.py <pasta> --alcancaveis <módulo>  # tudo que o módulo alcança (O(V + E))
 
 Os dois modos usam o mesmo formato de saída.
 """
@@ -11,7 +13,7 @@ Os dois modos usam o mesmo formato de saída.
 import argparse
 from pathlib import Path
 
-from src.ciclos import encontrar_ciclo
+from src.ciclos import alcancaveis, encontrar_ciclo
 from src.enumeracao import encontrar_ciclos
 from src.extracao import construir_grafo
 from src.grafo import Digrafo
@@ -54,36 +56,25 @@ def _imprimir_um(graph: dict[str, set[str]]) -> None:
     print(_linha_ciclo(1, ciclo))
 
 
-def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="Analisa dependências circulares de um projeto Python")
-    ap.add_argument("projeto", help="pasta do projeto (raiz dos pacotes)")
-    ap.add_argument("--so-um-ciclo", action="store_true",
-                    help="roda só o encontrar_ciclo (Atividade A) e mostra um ciclo")
-    ap.add_argument("--limite-ciclos", type=int, default=50,
-                    help="máximo de ciclos listados no modo padrão (padrão: 50)")
-    args = ap.parse_args(argv)
+def _imprimir_alcancaveis(graph: dict[str, set[str]], origem: str) -> None:
+    """Todos os módulos que `origem` alcança seguindo dependências (A → B: A usa B)."""
+    alc = sorted(alcancaveis(graph, origem))
+    print(f"=== Alcançáveis a partir de {origem} ===")
+    if not alc:
+        print("Nenhum: o módulo não depende de outros módulos internos.")
+        return
+    print(f"{len(alc)} módulo(s):")
+    for v in alc:
+        print(f"  {v}")
 
-    raiz = Path(args.projeto)
-    if not raiz.is_dir():
-        ap.error(f"pasta não encontrada: {raiz}")
 
-    graph = construir_grafo(raiz)
-    g = Digrafo(graph)
-    print(g)
-    for u in g.vertices():
-        print(f"{u} -> {g.vizinhos(u)}")
-    print()
-
-    if args.so_um_ciclo:
-        _imprimir_um(graph)
-    else:
-        _imprimir_todos(graph, args.limite_ciclos)
-
+def _imprimir_sccs(graph: dict[str, set[str]]) -> None:
+    """Atividade B: SCCs (Kosaraju–Sharir) e relação dos módulos com as componentes cíclicas."""
     components = encontrar_sccs(graph)
     classifications = classificar_sccs(graph, components)
     relation = analisar_relacao_ciclo(graph, components)
 
-    print("\n=== Componentes fortemente conexas ===")
+    print("=== Componentes fortemente conexas ===")
     for classification in classifications:
         status = "cíclica" if classification["eh_ciclica"] else "acíclica / trivial"
         vertices = ", ".join(classification["vertices"])
@@ -101,6 +92,44 @@ def main(argv: list[str] | None = None) -> None:
         "Nós externos que alcançam SCCs cíclicas: "
         f"{', '.join(sorted(relation['alcancam_scc_ciclica_sem_pertencer'])) or 'nenhum'}"
     )
+
+
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description="Analisa dependências circulares de um projeto Python")
+    ap.add_argument("projeto", help="pasta do projeto (raiz dos pacotes)")
+    ap.add_argument("--so-um-ciclo", action="store_true",
+                    help="roda só o encontrar_ciclo (Atividade A) e mostra um ciclo")
+    ap.add_argument("--so-sccs", action="store_true",
+                    help="roda só o Kosaraju–Sharir (Atividade B) e mostra as SCCs")
+    ap.add_argument("--alcancaveis", metavar="MÓDULO",
+                    help="mostra tudo que o módulo alcança (em vez da análise de ciclos)")
+    ap.add_argument("--limite-ciclos", type=int, default=50,
+                    help="máximo de ciclos listados no modo padrão (padrão: 50)")
+    args = ap.parse_args(argv)
+
+    raiz = Path(args.projeto)
+    if not raiz.is_dir():
+        ap.error(f"pasta não encontrada: {raiz}")
+
+    graph = construir_grafo(raiz)
+    g = Digrafo(graph)
+    print(g)
+    for u in g.vertices():
+        print(f"{u} -> {g.vizinhos(u)}")
+    print()
+
+    if args.alcancaveis:
+        if args.alcancaveis not in graph:
+            ap.error(f"módulo não encontrado no grafo: {args.alcancaveis}")
+        _imprimir_alcancaveis(graph, args.alcancaveis)
+    elif args.so_um_ciclo:
+        _imprimir_um(graph)
+    elif args.so_sccs:
+        _imprimir_sccs(graph)
+    else:
+        _imprimir_todos(graph, args.limite_ciclos)
+        print()
+        _imprimir_sccs(graph)
 
 
 if __name__ == "__main__":

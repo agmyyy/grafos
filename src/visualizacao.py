@@ -80,6 +80,15 @@ _MODELO = r"""<!DOCTYPE html>
   ul { margin:4px 0; padding-left:18px; }
   li { margin:2px 0; word-break:break-all; }
   li.clicavel { cursor:pointer; } li.clicavel:hover { text-decoration:underline; }
+  .leg { display:grid; grid-template-columns:24px 1fr; gap:7px 8px; align-items:center; }
+  .sw.no { width:12px; height:12px; border-radius:50%; justify-self:center; }
+  .sw.arco { width:22px; height:4px; border-radius:2px; }
+  .sw.multi { background:conic-gradient(#e53935 0 33%, #8e24aa 0 66%, #3949ab 0); }
+  .nota { margin-top:10px; color:var(--suave); }
+  .nome { font-weight:600; word-break:break-all; }
+  .sec { margin-top:10px; font-weight:600; }
+  .sec.azul { color:var(--azul); } .sec.verde { color:var(--verde); }
+  #info button { margin:4px 0; }
   .chip { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
   .aviso { background:#fff8e1; border:1px solid #ffe082; padding:6px 8px; border-radius:4px; margin:6px 0; }
   .ok { color:var(--verde); } .ruim { color:var(--vermelho); }
@@ -116,14 +125,17 @@ _MODELO = r"""<!DOCTYPE html>
   <h2 id="tOrdem" style="display:none">Ordenação topológica</h2>
   <div id="ordem"></div>
   <h2>Legenda</h2>
-  <div id="legenda">
-    <div><span class="chip" style="background:#90a4ae"></span>módulo fora de componente cíclica</div>
-    <div><span class="chip" style="background:#e53935"></span>cor forte: módulos de uma componente cíclica (uma cor por componente)</div>
-    <div><span style="color:#d32f2f">━</span> arco dentro de componente cíclica &nbsp; <span style="color:#78909c">━</span> arco comum</div>
-    <div><span style="color:#ef6c00">━</span> ciclo destacado (clique num ciclo da lista)</div>
-    <div>Ao selecionar: <span style="color:#1565c0">━</span> dependências diretas, <span style="color:#2e7d32">━</span> quem depende dele.</div>
-    <div style="margin-top:6px;color:#777">Arco A → B: A importa B (A depende de B).</div>
+  <div id="legenda" class="leg">
+    <span class="sw no" style="background:#90a4ae"></span><span>Módulo fora de componente cíclica</span>
+    <span class="sw no multi"></span><span>Módulo em componente cíclica (uma cor por componente)</span>
+    <span class="sw arco" style="background:#d32f2f"></span><span>Arco dentro de componente cíclica</span>
+    <span class="sw arco" style="background:#78909c"></span><span>Arco comum</span>
+    <span class="sw arco" style="background:#ef6c00"></span><span>Ciclo destacado (clique num ciclo da lista)</span>
+    <span class="sw arco" style="background:#1565c0"></span><span>Dependências diretas do módulo selecionado</span>
+    <span class="sw arco" style="background:#2e7d32"></span><span>Dependentes diretos do módulo selecionado</span>
+    <span class="sw arco" style="background:#6a1b9a"></span><span>Alcançáveis a partir do módulo selecionado</span>
   </div>
+  <div class="nota">Arco A → B: A importa B (A depende de B).</div>
 </div>
 <div id="palco">
   <svg id="svg">
@@ -147,6 +159,7 @@ let modo = "grafo";            // "grafo" | "cond"
 let selecionado = null;
 let mostrarCiclo = false, mostrarRotulos = true;
 let cicloAtivo = null;         // índice do ciclo escolhido na lista
+let mostrarAlcance = false;    // destaca tudo que o módulo selecionado alcança
 let termoBusca = "";
 let destaque = null;          // conjunto de módulos destacado (clique numa SCC)
 let vista = {x: 0, y: 0, k: 1};
@@ -283,7 +296,7 @@ function marcador(id, cor) {
 function prepararMarcadores() {
   defs.innerHTML = "";
   [["m-comum", COR_ARCO], ["m-ciclico", COR_CICLICO], ["m-saida", "#1565c0"],
-   ["m-entrada", "#2e7d32"], ["m-ciclo", "#ef6c00"]].forEach(([i, c]) => marcador(i, c));
+   ["m-entrada", "#2e7d32"], ["m-ciclo", "#ef6c00"], ["m-alcance", "#6a1b9a"]].forEach(([i, c]) => marcador(i, c));
 }
 
 function raioDe(n) { return modo === "cond" ? 11 + 3 * Math.sqrt(n.membros.length) : 8; }
@@ -330,6 +343,7 @@ function desenhar() {
   const chave = new Set(vz.arcos.map(a => a.u + "\u0000" + a.v));
   const {saida, entrada} = indexar(vz.nos, vz.arcos.map(a => [a.u, a.v]));
   const sel = selecionado;
+  const alc = (sel && mostrarAlcance) ? alcancaveis(saida, sel) : null;
   const vizSaida = sel ? saida.get(sel) : null, vizEntrada = sel ? entrada.get(sel) : null;
   const termo = termoBusca.trim().toLowerCase();
 
@@ -339,7 +353,10 @@ function desenhar() {
   vz.arcos.forEach(a => {
     let cor = COR_ARCO, larg = 1.4, mk = "m-comum", op = 0.75;
     if (arcoCiclico(a)) { cor = COR_CICLICO; mk = "m-ciclico"; larg = 1.8; op = 0.9; }
-    if (sel) {
+    if (sel && alc) {
+      if (a.u === sel || alc.has(a.u)) { cor = "#6a1b9a"; mk = "m-alcance"; larg = 2.4; op = 1; }
+      else op = 0.08;
+    } else if (sel) {
       if (a.u === sel) { cor = "#1565c0"; mk = "m-saida"; larg = 2.6; op = 1; }
       else if (a.v === sel) { cor = "#2e7d32"; mk = "m-entrada"; larg = 2.6; op = 1; }
       else op = 0.08;
@@ -352,7 +369,8 @@ function desenhar() {
   });
 
   vz.nos.forEach(n => {
-    const alvoSel = sel && (n.id === sel || vizSaida.has(n.id) || vizEntrada.has(n.id));
+    const alvoSel = sel && (alc ? (n.id === sel || alc.has(n.id))
+                                : (n.id === sel || vizSaida.has(n.id) || vizEntrada.has(n.id)));
     const membrosTxt = (modo === "cond" ? n.membros.join(" ") : "").toLowerCase();
     const casa = (termo && (n.id.toLowerCase().includes(termo) || membrosTxt.includes(termo)))
               || (destaque && destaque.has(n.id));
@@ -421,7 +439,7 @@ function ligarCliques(raiz) {
 }
 
 function selecionar(id) {
-  selecionado = id; destaque = null; cicloAtivo = null; desenhar(); atualizarInfo();
+  selecionado = id; destaque = null; cicloAtivo = null; mostrarAlcance = false; desenhar(); atualizarInfo();
 }
 
 function atualizarInfo() {
@@ -429,14 +447,16 @@ function atualizarInfo() {
   if (!selecionado) { caixa.innerHTML = "Clique em um módulo para ver suas dependências."; return; }
   const {saida, entrada} = indexar(vz.nos, vz.arcos.map(a => [a.u, a.v]));
   const alc = alcancaveis(saida, selecionado);
-  let html = `<b>${selecionado}</b>`;
+  let html = `<div class="nome">${selecionado}</div>`;
   if (modo === "cond") {
     const n = vz.nos.find(x => x.id === selecionado);
-    html += `<br>Membros:${ul(n.membros, false)}`;
+    html += `<div class="sec">Membros</div>${ul(n.membros, false)}`;
   }
-  html += `<br><span style="color:#1565c0">Depende diretamente de (${saida.get(selecionado).size}):</span>${ul([...saida.get(selecionado)].sort(), true)}`;
-  html += `<span style="color:#2e7d32">Dependentes diretos (${entrada.get(selecionado).size}):</span>${ul([...entrada.get(selecionado)].sort(), true)}`;
-  html += `Alcança ${alc.size} módulo(s) ao seguir dependências.`;
+  html += `<div class="sec azul">Depende diretamente de (${saida.get(selecionado).size})</div>${ul([...saida.get(selecionado)].sort(), true)}`;
+  html += `<div class="sec verde">Dependentes diretos (${entrada.get(selecionado).size})</div>${ul([...entrada.get(selecionado)].sort(), true)}`;
+  html += `<div class="sec">Alcança ${alc.size} módulo(s) ao seguir dependências</div>`;
+  html += `<button id="bAlcance" class="${mostrarAlcance ? "ativo" : ""}">${mostrarAlcance ? "Limpar destaque" : "Destacar alcançáveis"}</button>`;
+  if (mostrarAlcance) html += ul([...alc].sort(), true);
   if (modo === "grafo" && SCC) {
     const i = SCC.comp.get(selecionado);
     if (SCC.ciclica[i]) html += `<div class="ruim"><b>Pertence a uma componente cíclica</b> (SCC com ${DADOS.sccs[i].length} módulo(s)).</div>`;
@@ -448,6 +468,8 @@ function atualizarInfo() {
     }
   }
   caixa.innerHTML = html; ligarCliques(caixa);
+  const bAlc = el("bAlcance");
+  if (bAlc) bAlc.onclick = () => { mostrarAlcance = !mostrarAlcance; desenhar(); atualizarInfo(); };
 }
 
 function escolherCiclo(i) {
@@ -506,7 +528,7 @@ function preencherPainel() {
 
 // ---------- botões ----------
 function trocarModo(m) {
-  modo = m; selecionado = null; cicloAtivo = null; destaque = null;
+  modo = m; selecionado = null; cicloAtivo = null; destaque = null; mostrarAlcance = false;
   el("bGrafo").classList.toggle("ativo", m === "grafo");
   el("bCond").classList.toggle("ativo", m === "cond");
   el("bCiclo").style.display = m === "grafo" ? "" : "none";

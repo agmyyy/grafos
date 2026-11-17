@@ -39,6 +39,7 @@ grafos/
 │   ├── test_grafo.py        # testes do Digrafo
 │   ├── test_analisar.py     # testes da CLI analisar.py
 │   ├── test_ciclos.py       # testes do DFS e da detecção de ciclos
+│   ├── test_determinismo.py # saída idêntica com hash seeds diferentes (uso de sorted)
 │   ├── test_enumeracao.py   # testes da enumeração de ciclos
 │   ├── test_extracao.py     # testes do extrator de imports
 │   ├── test_scc.py          # testes das componentes fortemente conexas
@@ -67,6 +68,7 @@ python -m pytest tests/test_extracao.py          # só um arquivo
 python -m pytest tests/test_ciclos.py            # só os testes do DFS
 python -m pytest tests/test_enumeracao.py        # só os testes da enumeração de ciclos
 python -m pytest tests/test_scc.py              # só os testes de SCCs
+python -m pytest tests/test_determinismo.py      # reprodutibilidade da saída
 python -m pytest -k remover                      # só testes cujo nome contém "remover"
 ```
 
@@ -79,6 +81,8 @@ pacote (por exemplo `dados/cyclic_app/` contém `cyclic_app/`).
 python analisar.py dados/cyclic_app                      # grafo + TODOS os ciclos
 python analisar.py dados/realistic_app --limite-ciclos 200   # muda o limite (padrão: 50)
 python analisar.py dados/cyclic_app --so-um-ciclo        # só a Atividade A: um ciclo
+python analisar.py dados/cyclic_app --so-sccs            # só a Atividade B: SCCs (Kosaraju–Sharir)
+python analisar.py dados/realistic_app --alcancaveis realistic_app.api.routes   # tudo que o módulo alcança
 ```
 
 Saída em todos os modos: número de módulos e dependências e a lista
@@ -89,9 +93,13 @@ Saída em todos os modos: número de módulos e dependências e a lista
 - **`--so-um-ciclo`:** roda **apenas** `ciclos.encontrar_ciclo` para a busca de ciclos
   (DFS da Atividade A, O(V + E)) e imprime um ciclo no mesmo formato da lista do modo
   padrão. A DFS para no primeiro ciclo encontrado.
-- **Em ambos os modos:** também lista as componentes fortemente conexas (SCCs), indica
+- **`--so-sccs`:** roda **apenas** o Kosaraju–Sharir (Atividade B).
+- **`--alcancaveis MÓDULO`:** lista tudo que o módulo alcança seguindo dependências
+  diretas e indiretas (A → B: A usa B). Não roda a análise de ciclos nem de SCCs.
+- **Modo padrão** (e `--so-sccs`): lista as componentes fortemente conexas (SCCs), indica
   quais são cíclicas e separa os módulos que pertencem a ciclos daqueles que apenas
-  alcançam uma componente cíclica.
+  alcançam uma componente cíclica. Com `--so-um-ciclo` e `--alcancaveis`, as SCCs não
+  são calculadas.
 
 Cada ciclo é impresso com o primeiro módulo repetido no fim, para mostrar que ele "fecha":
 `a ➔ b ➔ c ➔ a` tem **3 módulos** e **3 dependências** (a→b, b→c, c→a). Em um ciclo simples,
@@ -115,7 +123,8 @@ python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 
   reposicioná-lo. "Ajustar tela" enquadra tudo.
 - **Buscar módulo:** destaca os módulos cujo nome contém o texto digitado.
 - **Clique em um módulo:** mostra dependências diretas (azul), dependentes diretos
-  (verde) e quantos módulos ele alcança. Com as SCCs disponíveis, diz se o módulo
+  (verde) e quantos módulos ele alcança. O botão **"Destacar alcançáveis"** pinta de roxo
+  tudo que ele alcança e lista esses módulos. Com as SCCs disponíveis, diz se o módulo
   **pertence** a uma componente cíclica ou **apenas depende** de uma (a distinção pedida
   na Atividade B).
 - **Cores:** cada componente cíclica tem uma cor; setas internas a ela ficam vermelhas.
@@ -127,9 +136,6 @@ python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 
 - **Condensação:** alterna para o grafo de componentes, organizado em colunas pela
   ordenação topológica (dependentes à esquerda, dependências à direita), com a ordem
   listada ao lado. _(precisa de `kosaraju`, `condensar` e `ordenacao_topologica`)_
-
-Para usar na apresentação e no relatório, gere uma página por exemplo
-(acíclico, ciclo simples, vários ciclos, duas SCCs ligadas, projeto demo) e tire capturas.
 
 ---
 
@@ -174,8 +180,54 @@ Tipos trocados entre os módulos: SCCs são `list[list[str]]`, um ciclo é `list
 
 Complexidades (V vértices, E arcos): espaço O(V + E); adicionar, remover e testar arco
 O(1) esperado; listar vizinhos O(grau); DFS, Kosaraju, condensação e ordenação
-topológica O(V + E). Ordenar os vizinhos (`sorted`) para tornar a saída reproduzível
-acrescenta O(E log E) no pior caso, sem afetar a correção.
+topológica O(V + E), sem contar a ordenação usada para tornar a saída reproduzível
+(ver 6.1, que mostra o custo extra de cada algoritmo).
+
+### 6.1 Reprodutibilidade e o uso de `sorted`
+
+**Problema.** Um `set` não tem ordem garantida, e o Python usa um hash aleatório para
+strings, que muda a cada execução. Percorrer um conjunto pode dar ordens diferentes de
+uma execução para outra. Isso não torna nada incorreto, mas muda **qual ciclo** a DFS
+encontra primeiro, **a ordem e a numeração das SCCs** ("SCC 0, SCC 1...", "C0, C1...") e a
+ordenação topológica. Os resultados do relatório não seriam reproduzíveis.
+
+**Solução.** Percorrer sempre em ordem alfabética (`sorted`). O `sorted` só muda a
+**ordem de visita**: qualquer ordem produz ciclos válidos e SCCs corretas, a ordem fixa
+apenas torna a saída a mesma em toda execução.
+
+**Onde é usado:**
+
+- `src/grafo.py`: `vertices()`, `vizinhos()`, `vizinhos_saida()`, `vizinhos_entrada()` e
+  `arcos()` devolvem listas ordenadas. É por aqui que a DFS, a enumeração e a
+  visualização percorrem o grafo.
+- `src/ciclos.py`: `encontrar_ciclo` usa `vertices()` e `vizinhos_saida()`.
+- `src/enumeracao.py`: `encontrar_ciclos` usa `vertices()` e `vizinhos()`.
+- `src/scc.py`: ordena os vértices ao normalizar o grafo, os vizinhos na **primeira** DFS
+  do Kosaraju e os membros de cada SCC ao devolvê-la. A segunda DFS não ordena: a SCC é
+  um conjunto, então a ordem de visita dentro dela não altera o resultado.
+- `src/extracao.py`: `sorted(raiz.rglob("*.py"))`, para a ordem dos arquivos não
+  depender do sistema de arquivos.
+- `analisar.py` e `src/visualizacao.py`: ordenam listas apenas para exibição.
+
+**Efeito na complexidade.** Seja d o grau de saída de um vértice e Δ o maior grau do grafo.
+
+- Ordenar os vizinhos de um vértice custa O(d log d). Cada vértice tem os vizinhos
+  ordenados uma vez por DFS, então o total é Σ d log d ≤ E log Δ.
+- Ordenar os vértices uma vez custa O(V log V).
+- **DFS (`encontrar_ciclo`) e Kosaraju–Sharir:** de O(V + E) passam a
+  O(V + E + V log V + E log Δ), que é no máximo O((V + E) log V). Para ordenar também as
+  SCCs devolvidas no Kosaraju, soma-se Σ |SCC| log |SCC| ≤ V log V, já incluído acima.
+- **`vizinhos_entrada`:** O(V + k log k) por chamada (varre todos os vértices, k é o grau
+  de entrada). Evite chamá-la em laço; para todos os vértices use o grafo transposto.
+- **`encontrar_ciclos` (enumeração):** ordena os vizinhos cada vez que um vértice entra
+  no caminho, multiplicando cada passo por log Δ. Como o algoritmo já é exponencial no
+  número de ciclos (por isso existe o limite), isso é desprezível.
+- **Exibição:** ordenar uma lista de n itens para imprimir custa O(n log n).
+- Para manter O(V + E) **estrito**, não ordene: a saída passa a variar entre execuções.
+  Nos projetos de 10 a 50 módulos o fator logarítmico é irrelevante.
+
+**Teste.** `tests/test_determinismo.py` roda o Kosaraju e a enumeração com cinco valores
+de `PYTHONHASHSEED` e confere que a saída é sempre a mesma.
 
 ---
 
@@ -217,31 +269,5 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [ ] Exemplos pequenos (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas)
 - [ ] Projeto demonstrativo de 10 a 50 módulos
 - [ ] Relatório e apresentação
-
-**Mudanças**
-
-- **Base do projeto.** `Digrafo`, extrator e esqueletos dos algoritmos.
-  Rodar: `python -m pytest` e `python analisar.py dados/cyclic_app`.
-- **Visualização.** Página HTML interativa com busca, destaque de dependências, SCCs,
-  ciclo concreto e condensação.
-  Rodar: `python visualizar.py dados/cyclic_app --abrir`. Os recursos que dependem de
-  algoritmos ainda não implementados aparecem desativados.
-- **DFS e detecção de ciclos.** `ciclos.py` implementado, métodos novos em `Digrafo`
-  e `analisar.py` com resumo do DFS. Com isso, o botão "Mostrar ciclo concreto" da
-  visualização passa a funcionar.
-  Rodar: `python -m pytest tests/test_ciclos.py` e `python analisar.py dados/cyclic_app`.
-- **Lista de ciclos na visualização.** `src/enumeracao.py` (`encontrar_ciclos`) e painel
-  "Ciclos encontrados" na página, com destaque de cada ciclo.
-  Rodar: `python -m pytest tests/test_enumeracao.py` e
-  `python visualizar.py dados/cyclic_app --abrir`.
-- **Componentes fortemente conexas.** `src/scc.py` implementa Kosaraju-Sharir,
-  identifica componentes cíclicas (incluindo laços) e distingue módulos que pertencem a
-  ciclos daqueles que apenas alcançam uma SCC cíclica. A CLI lista as SCCs e a visualização
-  permite destacar seus membros.
-  Rodar: `python -m pytest tests/test_scc.py` e `python analisar.py dados/cyclic_app`.
-- **`analisar.py` com todos os ciclos.** Por padrão lista todos os ciclos (até o limite);
-  `--so-um-ciclo` roda só o `encontrar_ciclo` da Atividade A.
-  Rodar: `python analisar.py dados/cyclic_app` e
-  `python analisar.py dados/cyclic_app --so-um-ciclo`.
 
   Extração de imports baseada na ideia do DepCycle (MIT, Copyright (c) 2025 Kishan Thanki).
