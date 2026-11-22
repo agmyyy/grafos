@@ -77,3 +77,24 @@ def test_padrao_mostra_ciclos_e_sccs(tmp_path, capsys):
     main([str(_projeto(tmp_path))])
     saida = capsys.readouterr().out
     assert "=== Ciclos (todos" in saida and "=== Componentes fortemente conexas ===" in saida
+
+
+def test_so_condensacao_mostra_dag_e_ordem(tmp_path, capsys):
+    pacote = tmp_path / "app"
+    pacote.mkdir()
+    (pacote / "__init__.py").write_text("")
+    (pacote / "a.py").write_text("from app import b\n")
+    (pacote / "b.py").write_text("from app import a, c\n")
+    (pacote / "c.py").write_text("")
+    main([str(tmp_path), "--so-condensacao"])
+    saida = capsys.readouterr().out
+    assert "=== Condensação (Atividade C) ===" in saida
+    # componentes: {a, b}, {c} e {app} (o __init__, isolado); só {a, b} -> {c} entre elas
+    assert "3 componente(s), 1 dependência(s) entre componentes" in saida
+    linhas = saida.split("=== Ordenação topológica")[1].splitlines()[1:]
+    ordem = [l for l in linhas if l.strip()]
+    # app (o __init__) não depende de ninguém; {a, b} vem antes de {c}
+    pos_ab = next(i for i, l in enumerate(ordem) if "app.a, app.b" in l)
+    pos_c = next(i for i, l in enumerate(ordem) if "{app.c}" in l)
+    assert pos_ab < pos_c
+    assert "=== Componentes fortemente conexas ===" not in saida

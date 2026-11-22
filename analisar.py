@@ -5,6 +5,7 @@ Uso:
     python analisar.py <pasta> --limite-ciclos 200   # muda o limite (padrão: 50)
     python analisar.py <pasta> --so-um-ciclo         # só a Atividade A: um ciclo (DFS, O(V + E))
     python analisar.py <pasta> --so-sccs             # só a Atividade B: SCCs (Kosaraju–Sharir)
+    python analisar.py <pasta> --so-condensacao      # só a Atividade C: condensação + ordem topológica
     python analisar.py <pasta> --alcancaveis <módulo>  # tudo que o módulo alcança (O(V + E))
 
 Os dois modos usam o mesmo formato de saída.
@@ -14,10 +15,11 @@ import argparse
 from pathlib import Path
 
 from src.ciclos import alcancaveis, encontrar_ciclo
+from src.condensacao import condensar, ordenacao_topologica
 from src.enumeracao import encontrar_ciclos
 from src.extracao import construir_grafo
 from src.grafo import Digrafo
-from src.scc import analisar_relacao_ciclo, classificar_sccs, encontrar_sccs
+from src.scc import analisar_relacao_ciclo, classificar_sccs, encontrar_sccs, kosaraju
 
 
 def _linha_ciclo(i: int, ciclo: list[str]) -> str:
@@ -94,6 +96,25 @@ def _imprimir_sccs(graph: dict[str, set[str]]) -> None:
     )
 
 
+def _imprimir_condensacao(g: Digrafo) -> None:
+    """Atividade C: grafo de condensação (DAG das SCCs) e ordenação topológica."""
+    sccs = kosaraju(g)
+    g_cond, _ = condensar(g, sccs)
+    ordem = ordenacao_topologica(g_cond)
+
+    def rotulo(c: str) -> str:
+        return f"{c} {{{', '.join(sccs[int(c[1:])])}}}"
+
+    print("=== Condensação (Atividade C) ===")
+    print(f"{g_cond.num_vertices()} componente(s), {g_cond.num_arcos()} dependência(s) entre componentes")
+    for c in ordem:
+        deps = ", ".join(g_cond.vizinhos(c)) or "nenhuma"
+        print(f"  {rotulo(c)} -> {deps}")
+    print("\n=== Ordenação topológica (quem depende vem antes das suas dependências) ===")
+    for i, c in enumerate(ordem, 1):
+        print(f"  {i}) {rotulo(c)}")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="Analisa dependências circulares de um projeto Python")
     ap.add_argument("projeto", help="pasta do projeto (raiz dos pacotes)")
@@ -101,6 +122,8 @@ def main(argv: list[str] | None = None) -> None:
                     help="roda só o encontrar_ciclo (Atividade A) e mostra um ciclo")
     ap.add_argument("--so-sccs", action="store_true",
                     help="roda só o Kosaraju–Sharir (Atividade B) e mostra as SCCs")
+    ap.add_argument("--so-condensacao", action="store_true",
+                    help="mostra só a condensação e a ordenação topológica (Atividade C)")
     ap.add_argument("--alcancaveis", metavar="MÓDULO",
                     help="mostra tudo que o módulo alcança (em vez da análise de ciclos)")
     ap.add_argument("--limite-ciclos", type=int, default=50,
@@ -126,10 +149,14 @@ def main(argv: list[str] | None = None) -> None:
         _imprimir_um(graph)
     elif args.so_sccs:
         _imprimir_sccs(graph)
+    elif args.so_condensacao:
+        _imprimir_condensacao(g)
     else:
         _imprimir_todos(graph, args.limite_ciclos)
         print()
         _imprimir_sccs(graph)
+        print()
+        _imprimir_condensacao(g)
 
 
 if __name__ == "__main__":
