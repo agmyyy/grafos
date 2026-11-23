@@ -1,4 +1,4 @@
-"""Atividade C: condensação e ordenação topológica.  (Responsável: Agmy)
+"""Atividade C: condensação e ordenação topológica.
 
 Condensação
 -----------
@@ -62,7 +62,9 @@ def condensar(g: Digrafo, sccs: list[list[str]]) -> tuple[Digrafo, dict[str, int
         for v in destinos:
             cv = mapa[v]
             if cu != cv:  # arcos internos à SCC não aparecem na condensação
-                g_cond.adicionar_arco(_nome(cu), _nome(cv))  # set: arcos repetidos viram um só
+                g_cond.adicionar_arco(
+                    _nome(cu), _nome(cv)
+                )  # set: arcos repetidos viram um só
 
     return g_cond, mapa
 
@@ -92,7 +94,9 @@ def ordenacao_topologica(g_cond: Digrafo) -> list[str]:
 
     if len(ordem) != len(grau_entrada):
         restantes = sorted((v for v in grau_entrada if grau_entrada[v] > 0), key=_chave)
-        raise ValueError(f"o grafo tem ciclo; não há ordenação topológica (restam {restantes})")
+        raise ValueError(
+            f"o grafo tem ciclo; não há ordenação topológica (restam {restantes})"
+        )
     return ordem
 
 
