@@ -42,6 +42,7 @@ grafos/
 │   ├── test_condensacao.py  # testes da condensação e da ordenação topológica
 │   ├── test_determinismo.py # saída idêntica com hash seeds diferentes (uso de sorted)
 │   ├── test_enumeracao.py   # testes da enumeração de ciclos
+│   ├── test_exemplos.py     # garante a estrutura de cada exemplo de dados/
 │   ├── test_extracao.py     # testes do extrator de imports
 │   ├── test_remocao.py      # testes da simulação de remoção de dependências
 │   ├── test_scc.py          # testes das componentes fortemente conexas
@@ -52,7 +53,9 @@ grafos/
 │   ├── mixed_dependencies/
 │   ├── cyclic_app/
 │   ├── realistic_app/
-│   └── multiplos_ciclos/    # exemplo próprio: dois ciclos na mesma SCC (Atividade D)
+│   ├── multiplos_ciclos/    # exemplo próprio: dois ciclos na mesma SCC (Atividade D)
+│   ├── ciclo_simples/       # exemplo próprio: um único ciclo a → b → c → a
+│   └── duas_sccs_ligadas/   # exemplo próprio: duas SCCs cíclicas ligadas em um sentido
 └── saida/                   # páginas HTML geradas (ignorada pelo git)
 ```
 
@@ -131,6 +134,24 @@ python visualizar.py dados/realistic_app --abrir      # gera e abre no navegador
 python visualizar.py dados/cyclic_app -o saida/demo.html
 python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 ciclos (padrão: 50)
 ```
+
+### 3.4 Exemplos pequenos (um para cada caso do enunciado)
+
+- **Digrafo acíclico:** `dados/basic_app`, `dados/layered_app`, `dados/mixed_dependencies`.
+- **Ciclo simples:** `dados/ciclo_simples` (`a ➔ b ➔ c ➔ a`, três módulos).
+- **Componente com vários ciclos:** `dados/multiplos_ciclos` (`hub ↔ a` e `hub ↔ b`: uma SCC
+  de 3 módulos com 2 ciclos).
+- **Duas componentes cíclicas ligadas em um único sentido:** `dados/duas_sccs_ligadas`
+  (`{a1, a2}` e `{b1, b2, b3}`; o único arco entre elas é `a1 ➔ b1`).
+
+```bash
+python analisar.py dados/ciclo_simples
+python analisar.py dados/duas_sccs_ligadas                  # veja a condensação: C(a) ➔ C(b)
+python visualizar.py dados/duas_sccs_ligadas --abrir        # botão "Condensação"
+python analisar.py dados/duas_sccs_ligadas --remover duas_sccs_ligadas.a1 duas_sccs_ligadas.b1   # arco entre SCCs: sem efeito
+```
+
+`tests/test_exemplos.py` confere a estrutura de cada exemplo.
 
 ---
 
@@ -316,7 +337,7 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [x] Atividade B: `kosaraju`, `sccs_ciclicas` e análise da relação com ciclos (`src/scc.py`)
 - [x] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
 - [x] Atividade D: `simular_remocao` (`src/remocao.py`)
-- [ ] Exemplos pequenos (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas)
+- [x] Exemplos pequenos (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas)
 - [ ] Projeto demonstrativo de 10 a 50 módulos
 - [ ] Relatório e apresentação
 

@@ -1,7 +1,19 @@
 """Atividade B: Kosaraju Sharir."""
+
 """Componentes fortemente conexas e análise de dependências cíclicas."""
 
+from typing import TypedDict
+
 from src.grafo import Digrafo
+
+
+class ClassificacaoScc(TypedDict):
+    """Metadados de uma SCC (devolvidos por classificar_sccs)."""
+
+    id: int
+    vertices: list[str]
+    tamanho: int
+    eh_ciclica: bool
 
 
 def _normalizar_grafo(grafo: dict[str, set[str]]) -> dict[str, set[str]]:
@@ -67,9 +79,9 @@ def encontrar_sccs(grafo: dict[str, set[str]]) -> list[set[str]]:
 
 def classificar_sccs(
     grafo: dict[str, set[str]], sccs: list[set[str]]
-) -> list[dict[str, object]]:
+) -> list[ClassificacaoScc]:
     """Classifica cada SCC como cíclica ou trivial e retorna seus metadados."""
-    classificacoes: list[dict[str, object]] = []
+    classificacoes: list[ClassificacaoScc] = []
     for identificador, componente in enumerate(sccs):
         vertices = sorted(componente)
         eh_ciclica = len(componente) > 1 or any(
