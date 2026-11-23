@@ -98,3 +98,35 @@ def test_so_condensacao_mostra_dag_e_ordem(tmp_path, capsys):
     pos_c = next(i for i, l in enumerate(ordem) if "{app.c}" in l)
     assert pos_ab < pos_c
     assert "=== Componentes fortemente conexas ===" not in saida
+
+
+def _projeto_hub(raiz: Path) -> Path:
+    pacote = raiz / "app"
+    pacote.mkdir()
+    (pacote / "__init__.py").write_text("")
+    (pacote / "hub.py").write_text("from app import a, b\n")
+    (pacote / "a.py").write_text("from app import hub\n")
+    (pacote / "b.py").write_text("from app import hub\n")
+    return raiz
+
+
+def test_remover_parcial(tmp_path, capsys):
+    main([str(_projeto_hub(tmp_path)), "--remover", "app.hub", "app.a"])
+    saida = capsys.readouterr().out
+    assert "=== Remoção de app.hub ➔ app.a ===" in saida
+    assert "NÃO eliminou todas as circularidades" in saida
+    assert "=== Ciclos (todos" not in saida
+
+
+def test_remover_duas_dependencias(tmp_path, capsys):
+    main([str(_projeto_hub(tmp_path)), "--remover", "app.hub", "app.a", "--remover", "app.b", "app.hub"])
+    saida = capsys.readouterr().out
+    assert saida.count("=== Remoção de") == 2
+
+
+def test_remover_arco_inexistente(tmp_path):
+    try:
+        main([str(_projeto_hub(tmp_path)), "--remover", "app.a", "app.b"])
+    except SystemExit:
+        return
+    raise AssertionError("deveria sair com erro")

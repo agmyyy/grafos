@@ -7,6 +7,7 @@ Uso:
     python analisar.py <pasta> --so-sccs             # só a Atividade B: SCCs (Kosaraju–Sharir)
     python analisar.py <pasta> --so-condensacao      # só a Atividade C: condensação + ordem topológica
     python analisar.py <pasta> --alcancaveis <módulo>  # tudo que o módulo alcança (O(V + E))
+    python analisar.py <pasta> --remover <origem> <destino>   # Atividade D: simula remover a dependência
 
 Os dois modos usam o mesmo formato de saída.
 """
@@ -19,6 +20,7 @@ from src.condensacao import condensar, ordenacao_topologica
 from src.enumeracao import encontrar_ciclos
 from src.extracao import construir_grafo
 from src.grafo import Digrafo
+from src.remocao import formatar_remocao, simular_remocao
 from src.scc import analisar_relacao_ciclo, classificar_sccs, encontrar_sccs, kosaraju
 
 
@@ -126,6 +128,9 @@ def main(argv: list[str] | None = None) -> None:
                     help="mostra só a condensação e a ordenação topológica (Atividade C)")
     ap.add_argument("--alcancaveis", metavar="MÓDULO",
                     help="mostra tudo que o módulo alcança (em vez da análise de ciclos)")
+    ap.add_argument("--remover", nargs=2, action="append", metavar=("ORIGEM", "DESTINO"),
+                    help="simula a remoção da dependência ORIGEM ➔ DESTINO (pode repetir; cada "
+                         "simulação parte do grafo original)")
     ap.add_argument("--limite-ciclos", type=int, default=50,
                     help="máximo de ciclos listados no modo padrão (padrão: 50)")
     args = ap.parse_args(argv)
@@ -141,7 +146,15 @@ def main(argv: list[str] | None = None) -> None:
         print(f"{u} -> {g.vizinhos(u)}")
     print()
 
-    if args.alcancaveis:
+    if args.remover:
+        for origem, destino in args.remover:
+            try:
+                resultado = simular_remocao(Digrafo(graph), origem, destino)
+            except ValueError as erro:
+                ap.error(str(erro))
+            print(formatar_remocao(resultado))
+            print()
+    elif args.alcancaveis:
         if args.alcancaveis not in graph:
             ap.error(f"módulo não encontrado no grafo: {args.alcancaveis}")
         _imprimir_alcancaveis(graph, args.alcancaveis)

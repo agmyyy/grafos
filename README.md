@@ -43,6 +43,7 @@ grafos/
 │   ├── test_determinismo.py # saída idêntica com hash seeds diferentes (uso de sorted)
 │   ├── test_enumeracao.py   # testes da enumeração de ciclos
 │   ├── test_extracao.py     # testes do extrator de imports
+│   ├── test_remocao.py      # testes da simulação de remoção de dependências
 │   ├── test_scc.py          # testes das componentes fortemente conexas
 │   └── test_visualizacao.py # testes dos dados enviados à página
 ├── dados/                   # projetos de exemplo e projeto demonstrativo
@@ -50,7 +51,8 @@ grafos/
 │   ├── layered_app/
 │   ├── mixed_dependencies/
 │   ├── cyclic_app/
-│   └── realistic_app/
+│   ├── realistic_app/
+│   └── multiplos_ciclos/    # exemplo próprio: dois ciclos na mesma SCC (Atividade D)
 └── saida/                   # páginas HTML geradas (ignorada pelo git)
 ```
 
@@ -69,6 +71,7 @@ python -m pytest tests/test_extracao.py          # só um arquivo
 python -m pytest tests/test_ciclos.py            # só os testes do DFS
 python -m pytest tests/test_enumeracao.py        # só os testes da enumeração de ciclos
 python -m pytest tests/test_scc.py              # só os testes de SCCs
+python -m pytest tests/test_remocao.py          # só os testes da simulação de remoção
 python -m pytest tests/test_determinismo.py      # reprodutibilidade da saída
 python -m pytest -k remover                      # só testes cujo nome contém "remover"
 ```
@@ -85,6 +88,7 @@ python analisar.py dados/cyclic_app --so-um-ciclo        # só a Atividade A: um
 python analisar.py dados/cyclic_app --so-sccs            # só a Atividade B: SCCs (Kosaraju–Sharir)
 python analisar.py dados/realistic_app --so-condensacao  # só a Atividade C: condensação + ordem topológica
 python analisar.py dados/realistic_app --alcancaveis realistic_app.api.routes   # tudo que o módulo alcança
+python analisar.py dados/multiplos_ciclos --remover multiplos_ciclos.hub multiplos_ciclos.a   # Atividade D
 ```
 
 Saída em todos os modos: número de módulos e dependências e a lista
@@ -99,6 +103,15 @@ Saída em todos os modos: número de módulos e dependências e a lista
 - **`--so-condensacao`:** mostra **apenas** o grafo de condensação (cada componente com
   seus módulos e as componentes de que depende) e a ordenação topológica (Atividade C).
   No modo padrão, essa saída aparece depois das SCCs.
+- **`--remover ORIGEM DESTINO`:** Atividade D. Simula a remoção da dependência
+  `ORIGEM ➔ DESTINO` e compara antes e depois (ciclos, SCCs e SCCs cíclicas). Pode ser
+  repetido; cada simulação parte do grafo original. O resultado é um destes:
+  - **eliminou todas as circularidades da componente:** a SCC deixou de ser cíclica
+    (ex.: `dados/cyclic_app`, remover `mod_a ➔ mod_b`);
+  - **não eliminou todas:** a SCC se dividiu, mas algum pedaço continua cíclico
+    (ex.: `dados/multiplos_ciclos`, remover `hub ➔ a`: sai `a`, mas `hub ↔ b` continua);
+  - **não altera nada:** o arco liga componentes diferentes e não está em nenhum ciclo
+    (ex.: `dados/multiplos_ciclos`, remover `web ➔ hub`).
 - **`--alcancaveis MÓDULO`:** lista tudo que o módulo alcança seguindo dependências
   diretas e indiretas (A → B: A usa B). Não roda a análise de ciclos nem de SCCs.
 - **Modo padrão** (e `--so-sccs`): lista as componentes fortemente conexas (SCCs), indica
@@ -302,7 +315,7 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [x] Enumeração de ciclos (`src/enumeracao.py`)
 - [x] Atividade B: `kosaraju`, `sccs_ciclicas` e análise da relação com ciclos (`src/scc.py`)
 - [x] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
-- [ ] Atividade D: `simular_remocao` (`src/remocao.py`)
+- [x] Atividade D: `simular_remocao` (`src/remocao.py`)
 - [ ] Exemplos pequenos (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas)
 - [ ] Projeto demonstrativo de 10 a 50 módulos
 - [ ] Relatório e apresentação
