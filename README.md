@@ -39,6 +39,7 @@ grafos/
 │   ├── test_grafo.py        # testes do Digrafo
 │   ├── test_analisar.py     # testes da CLI analisar.py
 │   ├── test_ciclos.py       # testes do DFS e da detecção de ciclos
+│   ├── test_condensacao.py  # testes da condensação e da ordenação topológica
 │   ├── test_determinismo.py # saída idêntica com hash seeds diferentes (uso de sorted)
 │   ├── test_enumeracao.py   # testes da enumeração de ciclos
 │   ├── test_extracao.py     # testes do extrator de imports
@@ -82,6 +83,7 @@ python analisar.py dados/cyclic_app                      # grafo + TODOS os cicl
 python analisar.py dados/realistic_app --limite-ciclos 200   # muda o limite (padrão: 50)
 python analisar.py dados/cyclic_app --so-um-ciclo        # só a Atividade A: um ciclo
 python analisar.py dados/cyclic_app --so-sccs            # só a Atividade B: SCCs (Kosaraju–Sharir)
+python analisar.py dados/realistic_app --so-condensacao  # só a Atividade C: condensação + ordem topológica
 python analisar.py dados/realistic_app --alcancaveis realistic_app.api.routes   # tudo que o módulo alcança
 ```
 
@@ -94,6 +96,9 @@ Saída em todos os modos: número de módulos e dependências e a lista
   (DFS da Atividade A, O(V + E)) e imprime um ciclo no mesmo formato da lista do modo
   padrão. A DFS para no primeiro ciclo encontrado.
 - **`--so-sccs`:** roda **apenas** o Kosaraju–Sharir (Atividade B).
+- **`--so-condensacao`:** mostra **apenas** o grafo de condensação (cada componente com
+  seus módulos e as componentes de que depende) e a ordenação topológica (Atividade C).
+  No modo padrão, essa saída aparece depois das SCCs.
 - **`--alcancaveis MÓDULO`:** lista tudo que o módulo alcança seguindo dependências
   diretas e indiretas (A → B: A usa B). Não roda a análise de ciclos nem de SCCs.
 - **Modo padrão** (e `--so-sccs`): lista as componentes fortemente conexas (SCCs), indica
@@ -245,10 +250,42 @@ de `PYTHONHASHSEED` e confere que a saída é sempre a mesma.
   `encontrar_ciclo`, que é O(V + E).
 - **`src/scc.py` (Atividade B):** `kosaraju(g)` devolve a lista de SCCs; `sccs_ciclicas`
   filtra as que têm ciclo (mais de um vértice, ou um vértice com laço).
-- **`src/condensacao.py` (Atividade C):** `condensar(g, sccs)` devolve o grafo de
-  condensação e o mapa vértice → índice da SCC; `ordenacao_topologica(g_cond)` ordena o DAG.
+- **`src/condensacao.py` (Atividade C, pronta):** `condensar(g, sccs)` devolve o grafo de
+  condensação e o mapa vértice → índice da SCC; `ordenacao_topologica(g_cond)` ordena o DAG
+  (algoritmo de Kahn, por graus de entrada). Ambas O(V + E), mais a ordenação para
+  desempate determinístico (ver 6.1). Detalhes na seção 7.1.
 - **`src/remocao.py` (Atividade D):** `simular_remocao(g, u, v)` remove o arco numa
   **cópia** e compara ciclos e SCCs antes e depois.
+
+### 7.1 Condensação: construção, justificativa e interpretação (Atividade C)
+
+**Construção.** Cada SCC `i` (na ordem devolvida por `kosaraju`) vira o super-vértice `Ci`.
+Existe o arco `Cx → Cy` (x ≠ y) quando há pelo menos um arco original `u → v` com `u` em
+`Cx` e `v` em `Cy`. Arcos internos a uma componente (incluindo laços) desaparecem, e vários
+arcos entre as mesmas duas componentes viram um só.
+
+**Por que a condensação é um DAG.** Se houvesse um ciclo `Cx → … → Cy → … → Cx` com x ≠ y,
+todo vértice de `Cx` alcançaria todo vértice de `Cy` e vice-versa, porque cada SCC é
+fortemente conexa internamente. Então `Cx ∪ Cy` seria fortemente conexo, o que contradiz a
+maximalidade das SCCs. Logo a condensação não tem ciclos, e todo DAG admite ordenação
+topológica.
+
+**Ordenação topológica.** Usa o algoritmo de Kahn: começa pelas componentes com grau de
+entrada 0 e remove seus arcos repetidamente. Se sobrar alguma componente, há ciclo e a
+função levanta `ValueError`, o que nunca acontece em uma condensação.
+
+**Sentido dos arcos.** `A → B` significa "A depende de B". Para todo arco `X → Y`, a ordem
+põe `X` antes de `Y`:
+
+- **Primeiras componentes:** nível mais alto, ninguém depende delas (por exemplo `main`
+  ou a API).
+- **Últimas componentes:** a base, não dependem de nenhuma componente interna (por exemplo
+  modelos e utilitários).
+- **Ordem de compilação ou carregamento:** como cada componente precisa vir depois das suas
+  dependências, basta ler a lista **ao contrário**.
+
+Uma componente cíclica aparece como um único bloco nessa hierarquia: seus módulos não podem
+ser ordenados entre si e só podem ser tratados juntos.
 
 ---
 
@@ -264,7 +301,7 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [x] Atividade A: `alcancaveis`, `tem_ciclo`, `encontrar_ciclo` (`src/ciclos.py`)
 - [x] Enumeração de ciclos (`src/enumeracao.py`)
 - [x] Atividade B: `kosaraju`, `sccs_ciclicas` e análise da relação com ciclos (`src/scc.py`)
-- [ ] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
+- [x] Atividade C: `condensar`, `ordenacao_topologica` (`src/condensacao.py`)
 - [ ] Atividade D: `simular_remocao` (`src/remocao.py`)
 - [ ] Exemplos pequenos (acíclico, ciclo simples, vários ciclos, duas SCCs ligadas)
 - [ ] Projeto demonstrativo de 10 a 50 módulos
