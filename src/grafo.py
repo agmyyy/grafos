@@ -51,6 +51,7 @@ class Digrafo:
             if target in destinations
         )
 
+    # percorre o grafo inteiro. só inclui a origem se houver caminho de volta (um ciclo), porque conta caminhos de um ou mais arcos.
     def alcancaveis(self, source: str) -> set[str]:
         """Retorna os vértices alcançáveis a partir de source por um ou mais arcos.
 
