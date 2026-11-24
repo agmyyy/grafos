@@ -85,13 +85,13 @@ A pasta passada deve ser a **raiz dos pacotes**. Nos exemplos, é a pasta que co
 pacote (por exemplo `dados/cyclic_app/` contém `cyclic_app/`).
 
 ```bash
-python analisar.py dados/cyclic_app                      # grafo + TODOS os ciclos
-python analisar.py dados/realistic_app --limite-ciclos 200   # muda o limite (padrão: 50)
-python analisar.py dados/cyclic_app --so-um-ciclo        # só a Atividade A: um ciclo
-python analisar.py dados/cyclic_app --so-sccs            # só a Atividade B: SCCs (Kosaraju–Sharir)
-python analisar.py dados/realistic_app --so-condensacao  # só a Atividade C: condensação + ordem topológica
-python analisar.py dados/realistic_app --alcancaveis realistic_app.api.routes   # tudo que o módulo alcança
-python analisar.py dados/multiplos_ciclos --remover multiplos_ciclos.hub multiplos_ciclos.a   # Atividade D
+python analisar.py dados/cyclic_app
+python analisar.py dados/cyclic_app --so-um-ciclo                 # só a Atividade A
+python analisar.py dados/cyclic_app --so-sccs                     # só a Atividade B
+python analisar.py dados/cyclic_app --so-condensacao              # só a Atividade C
+python analisar.py dados/realistic_app --alcancaveis realistic_app.api.routes
+python analisar.py dados/multiplos_ciclos --remover multiplos_ciclos.hub multiplos_ciclos.a   # Atividade D (repetível)
+python analisar.py dados/realistic_app --limite-ciclos 200        # limite de ciclos listados
 ```
 
 Saída em todos os modos: número de módulos e dependências e a lista

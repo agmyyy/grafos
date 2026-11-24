@@ -131,7 +131,7 @@ o número de módulos é sempre igual ao de dependências.
 ```bash
 python visualizar.py dados/cyclic_app                 # gera saida/cyclic_app.html
 python visualizar.py dados/realistic_app --abrir      # gera e abre no navegador
-python visualizar.py dados/cyclic_app -o saida/demo.html
+python visualizar.py dados/cyclic_app -o saida/demo.html    # gera saida/demo.html
 python visualizar.py dados/realistic_app --limite-ciclos 100   # lista até 100 ciclos (padrão: 50)
 ```
 
