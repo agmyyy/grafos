@@ -12,9 +12,8 @@ remoção de dependências. Os algoritmos de grafos são implementados pela equi
 
 ## 1. Requisitos e instalação
 
-Somente pytest.
-
-Não há dependências de execução além da biblioteca padrão do Python.
+Python 3.10 ou mais novo. A execução usa só a biblioteca padrão; o `pytest` é necessário
+apenas para os testes.
 
 ---
 
@@ -25,6 +24,7 @@ grafos/
 ├── README.md                # este arquivo (atualizar a cada mudança)
 ├── analisar.py              # CLI: extrai o grafo, imprime dependências e ciclos (todos ou só um)
 ├── visualizar.py            # CLI: gera a página HTML de visualização
+├── pytest.ini               # o pytest olha só tests/ (ignora dados/ e saida/)
 ├── src/
 │   ├── __init__.py
 │   ├── grafo.py             # classe Digrafo: lista de adjacência dict[str, set[str]]
@@ -33,6 +33,7 @@ grafos/
 │   ├── scc.py               # Atividade B: kosaraju, sccs_ciclicas
 │   ├── condensacao.py       # Atividade C: condensar, ordenacao_topologica
 │   ├── enumeracao.py        # encontrar_ciclos(g, limite): lista vários ciclos (para visualização e exemplos)
+│   ├── filtros.py           # filtros opcionais (--excluir, --sem-isolados); oculta __init__.py sem ligações
 │   ├── remocao.py           # Atividade D: simular_remocao
 │   └── visualizacao.py      # gera o HTML (só exibe; não calcula nada)
 ├── tests/
@@ -44,6 +45,7 @@ grafos/
 │   ├── test_enumeracao.py   # testes da enumeração de ciclos
 │   ├── test_exemplos.py     # garante a estrutura de cada exemplo de dados/
 │   ├── test_extracao.py     # testes do extrator de imports
+│   ├── test_filtros.py      # testes dos filtros
 │   ├── test_remocao.py      # testes da simulação de remoção de dependências
 │   ├── test_scc.py          # testes das componentes fortemente conexas
 │   └── test_visualizacao.py # testes dos dados enviados à página
@@ -76,6 +78,7 @@ python -m pytest tests/test_enumeracao.py        # só os testes da enumeração
 python -m pytest tests/test_scc.py              # só os testes de SCCs
 python -m pytest tests/test_remocao.py          # só os testes da simulação de remoção
 python -m pytest tests/test_determinismo.py      # reprodutibilidade da saída
+python -m pytest tests/test_filtros.py           # filtros de pastas e módulos isolados
 python -m pytest -k remover                      # só testes cujo nome contém "remover"
 ```
 
@@ -98,7 +101,10 @@ Saída em todos os modos: número de módulos e dependências e a lista
 `módulo -> [dependências diretas]`. Depois:
 
 - **Modo padrão:** todos os ciclos, até o limite (`src/enumeracao.py`), cada um com o
-  número de módulos. Se houver mais ciclos que o limite, avisa. Grafo acíclico: avisa.
+  número de módulos (se houver mais ciclos que o limite, ou se o grafo for acíclico, avisa);
+  depois as componentes fortemente conexas (SCCs), indicando quais são cíclicas e separando
+  os módulos que pertencem a ciclos dos que apenas alcançam uma componente cíclica; e, por
+  fim, a condensação com a ordenação topológica.
 - **`--so-um-ciclo`:** roda **apenas** `ciclos.encontrar_ciclo` para a busca de ciclos
   (DFS da Atividade A, O(V + E)) e imprime um ciclo no mesmo formato da lista do modo
   padrão. A DFS para no primeiro ciclo encontrado.
@@ -117,14 +123,24 @@ Saída em todos os modos: número de módulos e dependências e a lista
     (ex.: `dados/multiplos_ciclos`, remover `web ➔ hub`).
 - **`--alcancaveis MÓDULO`:** lista tudo que o módulo alcança seguindo dependências
   diretas e indiretas (A → B: A usa B). Não roda a análise de ciclos nem de SCCs.
-- **Modo padrão** (e `--so-sccs`): lista as componentes fortemente conexas (SCCs), indica
-  quais são cíclicas e separa os módulos que pertencem a ciclos daqueles que apenas
-  alcançam uma componente cíclica. Com `--so-um-ciclo` e `--alcancaveis`, as SCCs não
-  são calculadas.
+- **`--so-um-ciclo`, `--alcancaveis` e `--remover`** não calculam as SCCs.
 
 Cada ciclo é impresso com o primeiro módulo repetido no fim, para mostrar que ele "fecha":
 `a ➔ b ➔ c ➔ a` tem **3 módulos** e **3 dependências** (a→b, b→c, c→a). Em um ciclo simples,
 o número de módulos é sempre igual ao de dependências.
+
+**Filtros opcionais** (valem para `analisar.py` e `visualizar.py`):
+
+```bash
+python analisar.py . --excluir dados --excluir tests            # o próprio projeto, sem exemplos nem testes
+python visualizar.py meu_projeto/src --excluir tests --abrir    # projeto com layout src/: passe a pasta src
+```
+
+- **`--excluir PASTA`:** ignora pastas com esse nome (testes, docs, exemplos); pode ser repetido.
+- **`--sem-isolados`:** remove todo módulo sem dependências de/para outros, inclusive módulos reais.
+- **Layout `src/`:** passe `projeto/src` como raiz. Na raiz do repositório os módulos ganham o
+  prefixo `src.` e imports como `from pacote import x` não são reconhecidos.
+- Nenhum filtro altera ciclos nem SCCs não triviais; só mudam as contagens de vértices.
 
 ### 3.3 Visualizar no navegador
 
@@ -168,6 +184,8 @@ python analisar.py dados/duas_sccs_ligadas --remover duas_sccs_ligadas.a1 duas_s
   na Atividade B).
 - **Cores:** cada componente cíclica tem uma cor; setas internas a ela ficam vermelhas.
   Módulos fora de ciclo ficam cinza.
+- **Componentes fortemente conexas:** lista das SCCs e quantas são cíclicas; clique em uma
+  para destacar seus membros. _(precisa de `kosaraju`)_
 - **Ciclos encontrados:** lista de ciclos do projeto; clique em um para destacá-lo em
   laranja (clique de novo para limpar). "Destacar todos os ciclos" pinta de uma vez todos
   os arcos que participam de algum ciclo. Se o grafo é acíclico, a página avisa.
@@ -194,6 +212,8 @@ Implementado em `src/extracao.py`. Documentar no relatório.
   `__pycache__`, `build`, `dist`, `.git`.
 - **Não modelado:** `import a.b.c` não gera arcos para `a` e `a.b` (importações
   implícitas dos pacotes).
+- **`__init__.py` sem ligações** (os vértices que parecem pastas: o nome do app, `src`, `tests`)
+  **não aparece no grafo**; um `__init__.py` com dependências é mantido.
 - Arquivos com erro de sintaxe são pulados com aviso.
 
 ---
@@ -289,7 +309,8 @@ de `PYTHONHASHSEED` e confere que a saída é sempre a mesma.
   (algoritmo de Kahn, por graus de entrada). Ambas O(V + E), mais a ordenação para
   desempate determinístico (ver 6.1). Detalhes na seção 7.1.
 - **`src/remocao.py` (Atividade D):** `simular_remocao(g, u, v)` remove o arco numa
-  **cópia** e compara ciclos e SCCs antes e depois.
+  **cópia** e compara ciclos e SCCs antes e depois. Custo: cópia e remoção O(V + E); reavaliar
+  (DFS e Kosaraju) O(V + E) por simulação; a lista de ciclos é limitada por `limite_ciclos`.
 
 ### 7.1 Condensação: construção, justificativa e interpretação (Atividade C)
 
@@ -341,4 +362,8 @@ Atualize esta seção a cada mudança que altere como rodar o projeto.
 - [ ] Projeto demonstrativo de 10 a 50 módulos
 - [ ] Relatório e apresentação
 
-  Extração de imports baseada na ideia do DepCycle (MIT, Copyright (c) 2025 Kishan Thanki).
+---
+
+## Créditos
+
+Extração de imports baseada na ideia do DepCycle (MIT, Copyright (c) 2025 Kishan Thanki).

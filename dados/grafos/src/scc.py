@@ -21,7 +21,7 @@ def _normalizar_grafo(grafo: dict[str, set[str]]) -> dict[str, set[str]]:
     vertices = set(grafo)
     for destinos in grafo.values():
         vertices.update(destinos)
-    # sorted: a ordem das SCCs não pode depender do hash das strings (ver README, seção 7)
+    # sorted: a ordem das SCCs não pode depender do hash das strings (ver README, seção 6.1)
     return {vertice: set(grafo.get(vertice, set())) for vertice in sorted(vertices)}
 
 

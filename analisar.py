@@ -8,6 +8,8 @@ Uso:
     python analisar.py <pasta> --so-condensacao      # só a Atividade C: condensação + ordem topológica
     python analisar.py <pasta> --alcancaveis <módulo>  # tudo que o módulo alcança (O(V + E))
     python analisar.py <pasta> --remover <origem> <destino>   # Atividade D: simula remover a dependência
+    python analisar.py <pasta> --excluir tests --excluir docs # ignora pastas (pode repetir)
+    python analisar.py <pasta> --sem-isolados        # remove módulos sem nenhuma dependência de/para outros
 
 Os dois modos usam o mesmo formato de saída.
 """
@@ -18,7 +20,7 @@ from pathlib import Path
 from src.ciclos import alcancaveis, encontrar_ciclo
 from src.condensacao import condensar, ordenacao_topologica
 from src.enumeracao import encontrar_ciclos
-from src.extracao import construir_grafo
+from src.filtros import carregar_grafo
 from src.grafo import Digrafo
 from src.remocao import formatar_remocao, simular_remocao
 from src.scc import analisar_relacao_ciclo, classificar_sccs, encontrar_sccs, kosaraju
@@ -131,6 +133,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--remover", nargs=2, action="append", metavar=("ORIGEM", "DESTINO"),
                     help="simula a remoção da dependência ORIGEM ➔ DESTINO (pode repetir; cada "
                          "simulação parte do grafo original)")
+    ap.add_argument("--excluir", action="append", default=[], metavar="PASTA",
+                    help="ignora pastas com esse nome, ex.: --excluir tests --excluir docs (pode repetir)")
+    ap.add_argument("--sem-isolados", action="store_true",
+                    help="remove TODO módulo sem nenhuma dependência de/para outros (inclusive módulos reais)")
     ap.add_argument("--limite-ciclos", type=int, default=50,
                     help="máximo de ciclos listados no modo padrão (padrão: 50)")
     args = ap.parse_args(argv)
@@ -139,7 +145,7 @@ def main(argv: list[str] | None = None) -> None:
     if not raiz.is_dir():
         ap.error(f"pasta não encontrada: {raiz}")
 
-    graph = construir_grafo(raiz)
+    graph = carregar_grafo(raiz, args.excluir, args.sem_isolados)
     g = Digrafo(graph)
     print(g)
     for u in g.vertices():

@@ -27,7 +27,7 @@ def test_so_um_ciclo_roda_apenas_a_dfs(tmp_path, capsys):
     assert "=== Ciclo (Atividade A: encontrar_ciclo) ===" in saida
     assert "1 ciclo encontrado" in saida
     assert "app.a ➔ app.b ➔ app.a  (2 módulo(s))" in saida
-    assert "app.a ➔ app.c ➔ app.a" not in saida      # só um ciclo
+    assert "app.a ➔ app.c ➔ app.a" not in saida  # só um ciclo
     assert "=== Ciclos (todos" not in saida
 
 
@@ -49,7 +49,7 @@ def test_alcancaveis(tmp_path, capsys):
     main([str(_projeto(tmp_path)), "--alcancaveis", "app.b"])
     saida = capsys.readouterr().out
     assert "=== Alcançáveis a partir de app.b ===" in saida
-    assert "app.a" in saida and "app.c" in saida          # b -> a -> {b, c}
+    assert "app.a" in saida and "app.c" in saida  # b -> a -> {b, c}
     assert "=== Ciclos" not in saida
 
 
@@ -76,7 +76,10 @@ def test_so_sccs_roda_apenas_o_kosaraju(tmp_path, capsys):
 def test_padrao_mostra_ciclos_e_sccs(tmp_path, capsys):
     main([str(_projeto(tmp_path))])
     saida = capsys.readouterr().out
-    assert "=== Ciclos (todos" in saida and "=== Componentes fortemente conexas ===" in saida
+    assert (
+        "=== Ciclos (todos" in saida
+        and "=== Componentes fortemente conexas ===" in saida
+    )
 
 
 def test_so_condensacao_mostra_dag_e_ordem(tmp_path, capsys):
@@ -90,7 +93,7 @@ def test_so_condensacao_mostra_dag_e_ordem(tmp_path, capsys):
     saida = capsys.readouterr().out
     assert "=== Condensação (Atividade C) ===" in saida
     # componentes: {a, b}, {c} e {app} (o __init__, isolado); só {a, b} -> {c} entre elas
-    assert "3 componente(s), 1 dependência(s) entre componentes" in saida
+    assert "2 componente(s), 1 dependência(s) entre componentes" in saida
     linhas = saida.split("=== Ordenação topológica")[1].splitlines()[1:]
     ordem = [l for l in linhas if l.strip()]
     # app (o __init__) não depende de ninguém; {a, b} vem antes de {c}
@@ -119,7 +122,17 @@ def test_remover_parcial(tmp_path, capsys):
 
 
 def test_remover_duas_dependencias(tmp_path, capsys):
-    main([str(_projeto_hub(tmp_path)), "--remover", "app.hub", "app.a", "--remover", "app.b", "app.hub"])
+    main(
+        [
+            str(_projeto_hub(tmp_path)),
+            "--remover",
+            "app.hub",
+            "app.a",
+            "--remover",
+            "app.b",
+            "app.hub",
+        ]
+    )
     saida = capsys.readouterr().out
     assert saida.count("=== Remoção de") == 2
 
