@@ -21,13 +21,15 @@ from src.grafo import Digrafo
 GraphType = Digrafo | dict[str, set[str]]
 
 
+# só passa por vértices >= s na ordem alfabética (if v >= s). Isso é necessário para a enumeração
+# achar cada ciclo uma única vez, começando pelo menor vértice dele.
 def _alcance(d: Digrafo, s: str) -> set[str]:
     """Vértices >= s alcançáveis de s usando só vértices >= s (inclui s)."""
     visto = {s}
     pilha = [s]
     while pilha:
         u = pilha.pop()
-        for v in d.vizinhos(u):
+        for v in d.adj[u]:
             if v >= s and v not in visto:
                 visto.add(v)
                 pilha.append(v)

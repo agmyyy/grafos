@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 
 from src import ciclos, condensacao, enumeracao, scc
-from src.extracao import construir_grafo
+from src.filtros import carregar_grafo
 from src.grafo import Digrafo
 from src.visualizacao import gerar_html, montar_dados
 
@@ -32,6 +32,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Visualiza dependências de um projeto Python")
     ap.add_argument("projeto", help="pasta do projeto (raiz dos pacotes)")
     ap.add_argument("-o", "--saida", help="arquivo HTML de saída (padrão: saida/<pasta>.html)")
+    ap.add_argument("--excluir", action="append", default=[], metavar="PASTA",
+                    help="ignora pastas com esse nome, ex.: --excluir tests --excluir docs (pode repetir)")
+    ap.add_argument("--sem-isolados", action="store_true",
+                    help="remove TODO módulo sem nenhuma dependência de/para outros (inclusive módulos reais)")
     ap.add_argument("--abrir", action="store_true", help="abre a página no navegador")
     ap.add_argument("--limite-ciclos", type=int, default=50,
                     help="máximo de ciclos listados na página (padrão: 50)")
@@ -41,7 +45,7 @@ def main() -> None:
     if not raiz.is_dir():
         ap.error(f"pasta não encontrada: {raiz}")
 
-    g = Digrafo(construir_grafo(raiz))
+    g = Digrafo(carregar_grafo(raiz, args.excluir, args.sem_isolados))
     print(f"{raiz.name}: {g.num_vertices()} módulos, {g.num_arcos()} dependências")
 
     ciclo = _tentar("encontrar_ciclo", ciclos.encontrar_ciclo, g)
