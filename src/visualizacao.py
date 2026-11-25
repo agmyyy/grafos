@@ -22,7 +22,7 @@ def montar_dados(
     ciclos: list[list[str]] | None = None,  # Lista de ciclos encontrados.
     ciclos_truncado: bool = False,  # Indica se existem mais ciclos que os exibidos.
 ) -> dict:
-    """Converte os resultados da equipe no JSON que a página consome."""
+    """Converte os resultados que a página consome."""
 
     # Cria um dicionário chamado dados.
     # Ele reúne todas as informações que serão enviadas para a página HTML.
