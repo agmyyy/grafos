@@ -1,60 +1,140 @@
-"""Gera uma página HTML autocontida (sem internet, sem bibliotecas externas)
-para visualizar o digrafo, os ciclos, as SCCs e a condensação.
+"""
+Gera uma página HTML para visualizar o digrafo, os ciclos, as SCCs e a condensação.
 
-A página só MOSTRA resultados: quem calcula são os algoritmos da equipe
-(ciclos.py, scc.py, condensacao.py). O que ainda não estiver implementado
-simplesmente não aparece na página.
+A página só MOSTRA resultados: quem calcula são os algoritmos ciclos.py, scc.py e condensacao.py.
 """
 
 import json
-
 from src.grafo import Digrafo
 
 
+# Função responsável por reunir e organizar os resultados dos algoritmos.
+# Ela não calcula ciclos nem componentes fortemente conexas.
+# Apenas prepara os dados para que a página HTML consiga utilizá-los.
 def montar_dados(
-    g: Digrafo,
-    titulo: str = "Dependências",
-    sccs: list[list[str]] | None = None,
-    ciclo: list[str] | None = None,
-    g_cond: Digrafo | None = None,
-    mapa_scc: dict[str, int] | None = None,
-    ordem_topologica: list[str] | None = None,
-    ciclos: list[list[str]] | None = None,
-    ciclos_truncado: bool = False,
+    g: Digrafo,  # Grafo original do projeto.
+    titulo: str = "Dependências",  # Título que aparecerá na página.
+    sccs: list[list[str]] | None = None,  # Componentes fortemente conexas encontradas.
+    ciclo: list[str] | None = None,  # Um ciclo encontrado no grafo.
+    g_cond: Digrafo | None = None,  # Grafo condensado.
+    mapa_scc: dict[str, int] | None = None,  # Relaciona cada vértice à sua SCC.
+    ordem_topologica: list[str] | None = None,  # Ordem topológica do grafo condensado.
+    ciclos: list[list[str]] | None = None,  # Lista de ciclos encontrados.
+    ciclos_truncado: bool = False,  # Indica se existem mais ciclos que os exibidos.
 ) -> dict:
     """Converte os resultados da equipe no JSON que a página consome."""
+
+    # Cria um dicionário chamado dados.
+    # Ele reúne todas as informações que serão enviadas para a página HTML.
     dados: dict = {
+        # Armazena o título da página.
         "titulo": titulo,
+        # Obtém todos os vértices do grafo original.
+        # Cada vértice representa um módulo do projeto.
         "nos": g.vertices(),
+        # Obtém todos os arcos (ligações) do grafo.
+        # list(a) converte cada arco em uma lista.
         "arcos": [list(a) for a in g.arcos()],
+        # Se as SCCs foram fornecidas, organiza os vértices de cada componente
+        # em ordem alfabética utilizando sorted().
+        # Caso contrário, armazena None.
         "sccs": [sorted(c) for c in sccs] if sccs is not None else None,
+        # Armazena um ciclo encontrado pelo algoritmo.
         "ciclo": ciclo,
-        # lista de ciclos: None = não calculada; [] = grafo acíclico
+        # Armazena a lista de ciclos.
+        # Se ciclos não for None, utiliza a lista recebida.
+        # Caso contrário, verifica se existe um ciclo individual.
+        # Se existir, cria uma lista contendo esse ciclo.
+        # Se não existir, utiliza None.
         "ciclos": ciclos if ciclos is not None else ([ciclo] if ciclo else None),
+        # Informa se a quantidade de ciclos encontrados ultrapassou
+        # o limite de ciclos que serão exibidos.
         "ciclos_truncado": ciclos_truncado,
+        # Inicialmente, a condensação não possui dados.
+        # Será preenchida somente se o grafo condensado e o mapa das SCCs
+        # tiverem sido fornecidos.
         "condensacao": None,
     }
+
+    # Verifica se os dois dados necessários para montar a condensação
+    # foram fornecidos: o grafo condensado e o mapa das SCCs.
     if g_cond is not None and mapa_scc is not None:
+        # Cria um dicionário vazio.
+        # Ele armazenará os vértices originais agrupados por componente.
         membros: dict[int, list[str]] = {}
+
+        # Percorre o dicionário mapa_scc.
+        # v representa o vértice original.
+        # i representa o identificador da SCC à qual esse vértice pertence.
         for v, i in mapa_scc.items():
+            # setdefault() verifica se já existe uma lista associada ao ID i.
+            # Se não existir, cria uma lista vazia.
+            # Em seguida, append(v) adiciona o vértice à lista correspondente.
             membros.setdefault(i, []).append(v)
+
+        # Adiciona ao dicionário principal as informações da condensação.
         dados["condensacao"] = {
-            "nos": [{"id": c, "membros": sorted(membros.get(int(c[1:]), []))}
-                    for c in g_cond.vertices()],
+            # Obtém os vértices do grafo condensado.
+            # Cada vértice representa uma componente fortemente conexa.
+            "nos": [
+                # Para cada componente do grafo condensado, cria um dicionário
+                # contendo seu identificador e seus vértices originais.
+                {
+                    "id": c,
+                    # c[1:] remove o primeiro caractere do identificador.
+                    # int() converte o restante para inteiro.
+                    # membros.get() procura os vértices pertencentes à SCC.
+                    # Se não encontrar, retorna uma lista vazia.
+                    # sorted() organiza os vértices em ordem alfabética.
+                    "membros": sorted(membros.get(int(c[1:]), [])),
+                }
+                # Percorre todos os vértices do grafo condensado.
+                for c in g_cond.vertices()
+            ],
+            # Obtém os arcos do grafo condensado.
             "arcos": [list(a) for a in g_cond.arcos()],
+            # Armazena a ordenação topológica recebida.
             "ordem": ordem_topologica,
         }
+
+    # Retorna o dicionário com todos os dados organizados.
     return dados
 
 
+# Função responsável por gerar o código HTML completo da página.
+# Recebe o dicionário produzido pela função montar_dados().
 def gerar_html(dados: dict) -> str:
     """Devolve o HTML completo. `dados` vem de montar_dados()."""
+
+    # Converte o dicionário Python para uma string no formato JSON.
+    #
+    # ensure_ascii=False mantém caracteres especiais, como acentos,
+    # sem transformá-los em sequências Unicode.
+    #
+    # replace("</", "<\\/") evita que uma sequência </ presente nos dados
+    # seja interpretada acidentalmente como o fechamento de uma tag HTML
+    # dentro do elemento que contém o JavaScript.
     carga = json.dumps(dados, ensure_ascii=False).replace("</", "<\\/")
+
+    # Substitui os espaços reservados existentes no modelo HTML.
+    #
+    # __DADOS__ recebe os dados convertidos para JSON.
+    # __TITULO__ recebe o título da página.
+    #
+    # replace("<", "&lt;") transforma o caractere < em uma entidade HTML,
+    # evitando que ele seja interpretado como o início de uma tag.
     return _MODELO.replace("__DADOS__", carga).replace(
         "__TITULO__", dados["titulo"].replace("<", "&lt;")
     )
 
 
+# Armazena o modelo HTML que será utilizado como estrutura da página.
+# O prefixo r antes das aspas indica uma raw string.
+# Isso evita que o Python interprete determinadas barras invertidas
+# como caracteres especiais.
+#
+# Dentro desse modelo existem espaços reservados, como __DADOS__ e
+# __TITULO__, que serão substituídos pela função gerar_html().
 _MODELO = r"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
