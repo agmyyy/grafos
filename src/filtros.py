@@ -30,7 +30,7 @@ from src.extracao import (
 )
 
 
-# Função auxiliar que encontra todos os vértices que possuem
+# Função auxiliar que identifica todos os vértices que possuem
 # pelo menos uma ligação, seja de entrada ou de saída.
 def _com_arco(grafo: dict[str, set[str]]) -> set[str]:
     """Vértices que têm algum arco, de entrada ou de saída. O(V + E)."""
@@ -42,12 +42,13 @@ def _com_arco(grafo: dict[str, set[str]]) -> set[str]:
     # Se destinos não estiver vazio, significa que u possui
     # pelo menos uma aresta de saída.
     #
-    # Cria um conjunto contendo esses vértices.
+    # A compreensão de conjunto cria um conjunto contendo
+    # todos os vértices que possuem alguma aresta de saída.
     com_arco = {u for u, destinos in grafo.items() if destinos}
 
     # Percorre todos os conjuntos de destinos do grafo.
-    # Aqui queremos identificar também os vértices que possuem
-    # apenas arestas de entrada.
+    # Isso permite identificar também os vértices que possuem
+    # somente arestas de entrada.
     for destinos in grafo.values():
         # O operador |= realiza a união dos conjuntos.
         # Adiciona ao conjunto com_arco todos os vértices
@@ -81,8 +82,8 @@ def sem_isolados(grafo: dict[str, set[str]]) -> dict[str, set[str]]:
     # O if u in com_arco funciona como filtro:
     # somente os vértices que possuem alguma ligação são mantidos.
     #
-    # set(destinos) cria uma cópia do conjunto de destinos,
-    # evitando reutilizar diretamente o conjunto original.
+    # set(destinos) cria uma cópia do conjunto de destinos
+    # de cada vértice mantido.
     return {u: set(destinos) for u, destinos in grafo.items() if u in com_arco}
 
 
@@ -103,13 +104,14 @@ def sem_pacotes_isolados(
 
     # Cria um novo dicionário filtrando os vértices.
     return {
-        # Mantém o vértice e copia seu conjunto de destinos.
+        # Mantém o vértice e cria uma cópia do seu conjunto de destinos.
         u: set(destinos)
         # Percorre todos os vértices e seus respectivos destinos.
         for u, destinos in grafo.items()
-        # Mantém o vértice se:
-        # 1. Ele possui alguma ligação (está em com_arco); OU
-        # 2. Ele não é um pacote (não veio de um __init__.py).
+        # Mantém o vértice se pelo menos uma das condições for verdadeira:
+        #
+        # 1. u está em com_arco: possui alguma ligação.
+        # 2. u não está em pacotes: não representa um __init__.py.
         #
         # Portanto, pacotes isolados são removidos,
         # mas módulos comuns isolados continuam no grafo.
@@ -125,24 +127,32 @@ def _nomes_de_pacotes(raiz: Path, excluir: set[str]) -> set[str]:
     # a arquivos chamados __init__.py.
     nomes = {
         # Converte o caminho do arquivo para o nome do módulo Python.
-        caminho_para_modulo(arq, raiz)
+        nome
         # Percorre os arquivos encontrados dentro da pasta raiz,
         # respeitando as pastas que devem ser excluídas.
         for arq in listar_arquivos(raiz, excluir)
         # Considera somente arquivos chamados __init__.py.
         if arq.name == "__init__.py"
+        # Converte o caminho do arquivo para o nome do módulo
+        # e armazena o resultado na variável nome.
+        #
+        # O operador := (walrus) permite atribuir um valor
+        # a uma variável dentro de uma expressão.
+        #
+        # A condição is not None garante que somente nomes válidos
+        # sejam adicionados ao conjunto, evitando o erro de tipagem
+        # set[str | None].
+        if (nome := caminho_para_modulo(arq, raiz)) is not None
     }
 
-    # Remove o valor None do conjunto, caso exista.
-    # Isso é necessário porque caminho_para_modulo pode retornar None.
-    nomes.discard(None)
-
     # Retorna os nomes dos módulos que representam pacotes.
+    # Como os valores None já foram filtrados, o conjunto contém
+    # exclusivamente strings (set[str]).
     return nomes
 
 
-# Função principal responsável por carregar o grafo do projeto
-# e aplicar os filtros solicitados.
+# Função principal responsável por construir o grafo
+# e aplicar os filtros solicitados pelo usuário.
 def carregar_grafo(
     raiz: Path | str,  # Caminho da pasta raiz do projeto.
     excluir: Iterable[str] = (),  # Pastas ou arquivos que devem ser ignorados.
@@ -169,26 +179,29 @@ def carregar_grafo(
     # - Os padrões de exclusão definidos no projeto.
     # - Os nomes adicionais informados pelo usuário.
     #
+    # set() garante que os elementos estejam em conjuntos.
     # O operador | realiza a união dos conjuntos.
-    # Assim, os padrões padrão e os filtros personalizados
-    # são aplicados juntos.
+    # Assim, os filtros padrão e os personalizados são aplicados juntos.
     ignorar = set(EXCLUIDOS_PADRAO) | set(excluir)
 
     # Constrói o grafo de dependências do projeto.
     # Utiliza a pasta raiz e o conjunto de itens que devem ser ignorados.
     grafo = construir_grafo(raiz, ignorar)
 
-    # Verifica se o usuário deseja ocultar pacotes isolados.
+    # Verifica se a opção de ocultar pacotes isolados está ativada.
     if ocultar_init_isolados:
         # Identifica os módulos correspondentes aos arquivos __init__.py
         # e remove aqueles que não possuem nenhuma ligação no grafo.
+        #
+        # _nomes_de_pacotes() identifica quais vértices representam pacotes.
+        # sem_pacotes_isolados() utiliza essa informação para fazer o filtro.
         grafo = sem_pacotes_isolados(grafo, _nomes_de_pacotes(raiz, ignorar))
 
-    # Verifica se o usuário deseja ocultar TODOS os módulos isolados.
+    # Verifica se a opção de ocultar todos os módulos isolados está ativada.
     if ocultar_isolados:
         # Remove todos os vértices que não possuem nenhuma ligação,
         # incluindo módulos comuns e pacotes.
         grafo = sem_isolados(grafo)
 
-    # Retorna o grafo após a aplicação dos filtros.
+    # Retorna o grafo depois da construção e da aplicação dos filtros.
     return grafo
