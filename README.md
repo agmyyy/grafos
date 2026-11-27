@@ -193,6 +193,8 @@ python analisar.py dados/duas_sccs_ligadas --remover duas_sccs_ligadas.a1 duas_s
 - **Condensação:** alterna para o grafo de componentes, organizado em colunas pela
   ordenação topológica (dependentes à esquerda, dependências à direita), com a ordem
   listada ao lado. _(precisa de `kosaraju`, `condensar` e `ordenacao_topologica`)_
+  **Simular remoção de dependência:** clique numa seta dentro de um ciclo (ou escolha na lista);
+  **Aplicar remoção:** redesenha o grafo sem ela (tracejada) e recolore as SCCs."
 
 ---
 
