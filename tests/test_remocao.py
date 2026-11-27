@@ -1,5 +1,12 @@
 from src.grafo import Digrafo
-from src.remocao import ELIMINA_TODAS, PARCIAL, SEM_EFEITO, formatar_remocao, simular_remocao
+from src.remocao import (
+    ELIMINA_TODAS,
+    PARCIAL,
+    SEM_EFEITO,
+    formatar_remocao,
+    simular_remocao,
+    simular_remocoes_internas,
+)
 
 
 def _hub():
@@ -83,3 +90,31 @@ def test_formatar_os_tres_resultados():
 
     sem_efeito = formatar_remocao(simular_remocao(_hub(), "web", "hub"))
     assert "não altera ciclos nem SCCs" in sem_efeito
+
+
+def test_remocoes_internas_so_inclui_arcos_dentro_de_ciclos():
+    resultados, truncado = simular_remocoes_internas(_hub())
+    assert sorted(r["arco"] for r in resultados) == [("a", "hub"), ("b", "hub"), ("hub", "a"), ("hub", "b")]
+    assert not truncado                       # web -> hub não entra: não está em ciclo
+    assert all(r["veredito"] == PARCIAL for r in resultados)
+
+
+def test_remocoes_internas_de_ciclo_simples_eliminam():
+    resultados, _ = simular_remocoes_internas(Digrafo({"a": {"b"}, "b": {"a"}}))
+    assert [r["veredito"] for r in resultados] == [ELIMINA_TODAS, ELIMINA_TODAS]
+
+
+def test_remocoes_internas_respeitam_o_maximo():
+    resultados, truncado = simular_remocoes_internas(_hub(), maximo=2)
+    assert len(resultados) == 2 and truncado
+
+
+def test_remocoes_internas_em_grafo_aciclico():
+    assert simular_remocoes_internas(Digrafo({"a": {"b"}})) == ([], False)
+
+
+def test_reaproveitar_o_estado_antes_nao_muda_o_resultado():
+    from src.remocao import _avaliar
+
+    g = _hub()
+    assert simular_remocao(g, "hub", "a") == simular_remocao(g, "hub", "a", antes=_avaliar(g, 50))

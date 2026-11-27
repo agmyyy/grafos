@@ -43,10 +43,14 @@ def _modulos(componentes: list[list[str]]) -> set[str]:
     return {v for c in componentes for v in c}
 
 
-def simular_remocao(g: Digrafo, u: str, v: str, limite_ciclos: int = 50) -> dict:
+def simular_remocao(
+    g: Digrafo, u: str, v: str, limite_ciclos: int = 50, antes: dict | None = None
+) -> dict:
     """Remove u -> v numa CÓPIA de g e compara antes e depois.
 
     O grafo original não é alterado. Levanta ValueError se u -> v não existe.
+    `antes` permite reaproveitar o estado já calculado do grafo original (evita
+    recalcular quando se simulam várias remoções seguidas).
 
     Devolve um dicionário com:
     - arco: (u, v)
@@ -65,7 +69,8 @@ def simular_remocao(g: Digrafo, u: str, v: str, limite_ciclos: int = 50) -> dict
     apos = g.copia()
     apos.remover_arco(u, v)
 
-    antes = _avaliar(g, limite_ciclos)
+    if antes is None:
+        antes = _avaliar(g, limite_ciclos)
     depois = _avaliar(apos, limite_ciclos)
 
     scc_afetada = next((c for c in antes["sccs"] if u in c and v in c), None)
@@ -134,3 +139,29 @@ def formatar_remocao(r: dict) -> str:
     elif r["veredito"] == PARCIAL:
         linhas.append("Resultado: a remoção NÃO eliminou todas as circularidades da componente.")
     return "\n".join(linhas)
+
+
+def simular_remocoes_internas(
+    g: Digrafo, limite_ciclos: int = 50, maximo: int = 300
+) -> tuple[list[dict], bool]:
+    """Simula a remoção de cada dependência que está DENTRO de uma SCC cíclica.
+
+    São as únicas remoções que podem mudar ciclos e SCCs (um arco entre SCCs
+    diferentes não está em nenhum ciclo). Devolve (resultados, truncado), onde
+    `truncado` indica que havia mais de `maximo` dependências internas.
+
+    Custo: um cálculo do grafo original e, para cada dependência interna, uma
+    reavaliação O(V + E) (mais a lista de ciclos, limitada por `limite_ciclos`).
+    """
+    sccs = kosaraju(g)
+    internos: list[tuple[str, str]] = []
+    for componente in sccs_ciclicas(g, sccs):
+        membros = set(componente)
+        for u in sorted(componente):
+            internos.extend((u, v) for v in g.vizinhos(u) if v in membros)
+
+    antes = _avaliar(g, limite_ciclos)
+    resultados = [
+        simular_remocao(g, u, v, limite_ciclos, antes) for u, v in internos[:maximo]
+    ]
+    return resultados, len(internos) > maximo

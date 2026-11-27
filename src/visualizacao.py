@@ -1,140 +1,81 @@
-"""
-Gera uma página HTML para visualizar o digrafo, os ciclos, as SCCs e a condensação.
+"""Gera uma página HTML autocontida (sem internet, sem bibliotecas externas)
+para visualizar o digrafo, os ciclos, as SCCs e a condensação.
 
-A página só MOSTRA resultados: quem calcula são os algoritmos ciclos.py, scc.py e condensacao.py.
+A página só MOSTRA resultados: quem calcula são os algoritmos da equipe
+(ciclos.py, scc.py, condensacao.py). O que ainda não estiver implementado
+simplesmente não aparece na página.
 """
 
 import json
+
 from src.grafo import Digrafo
 
 
-# Função responsável por reunir e organizar os resultados dos algoritmos.
-# Ela não calcula ciclos nem componentes fortemente conexas.
-# Apenas prepara os dados para que a página HTML consiga utilizá-los.
-def montar_dados(
-    g: Digrafo,  # Grafo original do projeto.
-    titulo: str = "Dependências",  # Título que aparecerá na página.
-    sccs: list[list[str]] | None = None,  # Componentes fortemente conexas encontradas.
-    ciclo: list[str] | None = None,  # Um ciclo encontrado no grafo.
-    g_cond: Digrafo | None = None,  # Grafo condensado.
-    mapa_scc: dict[str, int] | None = None,  # Relaciona cada vértice à sua SCC.
-    ordem_topologica: list[str] | None = None,  # Ordem topológica do grafo condensado.
-    ciclos: list[list[str]] | None = None,  # Lista de ciclos encontrados.
-    ciclos_truncado: bool = False,  # Indica se existem mais ciclos que os exibidos.
-) -> dict:
-    """Converte os resultados que a página consome."""
-
-    # Cria um dicionário chamado dados.
-    # Ele reúne todas as informações que serão enviadas para a página HTML.
-    dados: dict = {
-        # Armazena o título da página.
-        "titulo": titulo,
-        # Obtém todos os vértices do grafo original.
-        # Cada vértice representa um módulo do projeto.
-        "nos": g.vertices(),
-        # Obtém todos os arcos (ligações) do grafo.
-        # list(a) converte cada arco em uma lista.
-        "arcos": [list(a) for a in g.arcos()],
-        # Se as SCCs foram fornecidas, organiza os vértices de cada componente
-        # em ordem alfabética utilizando sorted().
-        # Caso contrário, armazena None.
-        "sccs": [sorted(c) for c in sccs] if sccs is not None else None,
-        # Armazena um ciclo encontrado pelo algoritmo.
-        "ciclo": ciclo,
-        # Armazena a lista de ciclos.
-        # Se ciclos não for None, utiliza a lista recebida.
-        # Caso contrário, verifica se existe um ciclo individual.
-        # Se existir, cria uma lista contendo esse ciclo.
-        # Se não existir, utiliza None.
-        "ciclos": ciclos if ciclos is not None else ([ciclo] if ciclo else None),
-        # Informa se a quantidade de ciclos encontrados ultrapassou
-        # o limite de ciclos que serão exibidos.
-        "ciclos_truncado": ciclos_truncado,
-        # Inicialmente, a condensação não possui dados.
-        # Será preenchida somente se o grafo condensado e o mapa das SCCs
-        # tiverem sido fornecidos.
-        "condensacao": None,
+def _remocao_json(r: dict) -> dict:
+    """Resultado de simular_remocao no formato que a página consome."""
+    return {
+        "arco": list(r["arco"]),
+        "veredito": r["veredito"],
+        "scc_afetada": r["scc_afetada"],
+        "pedacos": r["pedacos"],
+        "pedacos_ciclicos": r["pedacos_ciclicos"],
+        "ciclos_que_usavam": r["ciclos_que_usavam_o_arco"],
+        "ciclos_restantes": r["depois"]["ciclos"],
+        "ciclos_restantes_truncado": r["depois"]["ciclos_truncado"],
+        "deixaram": r["deixaram_de_estar_em_ciclo"],
+        "sccs_depois": r["depois"]["sccs"],
     }
 
-    # Verifica se os dois dados necessários para montar a condensação
-    # foram fornecidos: o grafo condensado e o mapa das SCCs.
+
+def montar_dados(
+    g: Digrafo,
+    titulo: str = "Dependências",
+    sccs: list[list[str]] | None = None,
+    ciclo: list[str] | None = None,
+    g_cond: Digrafo | None = None,
+    mapa_scc: dict[str, int] | None = None,
+    ordem_topologica: list[str] | None = None,
+    ciclos: list[list[str]] | None = None,
+    ciclos_truncado: bool = False,
+    remocoes: list[dict] | None = None,
+    remocoes_truncado: bool = False,
+) -> dict:
+    """Converte os resultados da equipe no JSON que a página consome."""
+    dados: dict = {
+        "titulo": titulo,
+        "nos": g.vertices(),
+        "arcos": [list(a) for a in g.arcos()],
+        "sccs": [sorted(c) for c in sccs] if sccs is not None else None,
+        "ciclo": ciclo,
+        # lista de ciclos: None = não calculada; [] = grafo acíclico
+        "ciclos": ciclos if ciclos is not None else ([ciclo] if ciclo else None),
+        "ciclos_truncado": ciclos_truncado,
+        # simulações de remoção (só dependências dentro de SCCs cíclicas); None = não calculadas
+        "remocoes": [_remocao_json(r) for r in remocoes] if remocoes is not None else None,
+        "remocoes_truncado": remocoes_truncado,
+        "condensacao": None,
+    }
     if g_cond is not None and mapa_scc is not None:
-        # Cria um dicionário vazio.
-        # Ele armazenará os vértices originais agrupados por componente.
         membros: dict[int, list[str]] = {}
-
-        # Percorre o dicionário mapa_scc.
-        # v representa o vértice original.
-        # i representa o identificador da SCC à qual esse vértice pertence.
         for v, i in mapa_scc.items():
-            # setdefault() verifica se já existe uma lista associada ao ID i.
-            # Se não existir, cria uma lista vazia.
-            # Em seguida, append(v) adiciona o vértice à lista correspondente.
             membros.setdefault(i, []).append(v)
-
-        # Adiciona ao dicionário principal as informações da condensação.
         dados["condensacao"] = {
-            # Obtém os vértices do grafo condensado.
-            # Cada vértice representa uma componente fortemente conexa.
-            "nos": [
-                # Para cada componente do grafo condensado, cria um dicionário
-                # contendo seu identificador e seus vértices originais.
-                {
-                    "id": c,
-                    # c[1:] remove o primeiro caractere do identificador.
-                    # int() converte o restante para inteiro.
-                    # membros.get() procura os vértices pertencentes à SCC.
-                    # Se não encontrar, retorna uma lista vazia.
-                    # sorted() organiza os vértices em ordem alfabética.
-                    "membros": sorted(membros.get(int(c[1:]), [])),
-                }
-                # Percorre todos os vértices do grafo condensado.
-                for c in g_cond.vertices()
-            ],
-            # Obtém os arcos do grafo condensado.
+            "nos": [{"id": c, "membros": sorted(membros.get(int(c[1:]), []))}
+                    for c in g_cond.vertices()],
             "arcos": [list(a) for a in g_cond.arcos()],
-            # Armazena a ordenação topológica recebida.
             "ordem": ordem_topologica,
         }
-
-    # Retorna o dicionário com todos os dados organizados.
     return dados
 
 
-# Função responsável por gerar o código HTML completo da página.
-# Recebe o dicionário produzido pela função montar_dados().
 def gerar_html(dados: dict) -> str:
     """Devolve o HTML completo. `dados` vem de montar_dados()."""
-
-    # Converte o dicionário Python para uma string no formato JSON.
-    #
-    # ensure_ascii=False mantém caracteres especiais, como acentos,
-    # sem transformá-los em sequências Unicode.
-    #
-    # replace("</", "<\\/") evita que uma sequência </ presente nos dados
-    # seja interpretada acidentalmente como o fechamento de uma tag HTML
-    # dentro do elemento que contém o JavaScript.
     carga = json.dumps(dados, ensure_ascii=False).replace("</", "<\\/")
-
-    # Substitui os espaços reservados existentes no modelo HTML.
-    #
-    # __DADOS__ recebe os dados convertidos para JSON.
-    # __TITULO__ recebe o título da página.
-    #
-    # replace("<", "&lt;") transforma o caractere < em uma entidade HTML,
-    # evitando que ele seja interpretado como o início de uma tag.
     return _MODELO.replace("__DADOS__", carga).replace(
         "__TITULO__", dados["titulo"].replace("<", "&lt;")
     )
 
 
-# Armazena o modelo HTML que será utilizado como estrutura da página.
-# O prefixo r antes das aspas indica uma raw string.
-# Isso evita que o Python interprete determinadas barras invertidas
-# como caracteres especiais.
-#
-# Dentro desse modelo existem espaços reservados, como __DADOS__ e
-# __TITULO__, que serão substituídos pela função gerar_html().
 _MODELO = r"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -169,6 +110,10 @@ _MODELO = r"""<!DOCTYPE html>
   .sec { margin-top:10px; font-weight:600; }
   .sec.azul { color:var(--azul); } .sec.verde { color:var(--verde); }
   #info button { margin:4px 0; }
+  .tag { display:inline-block; white-space:nowrap; word-break:normal; font-size:11px; padding:1px 7px; border-radius:9px; margin-left:6px; }
+  .tag.elimina { background:#e8f5e9; color:#2e7d32; }
+  .tag.parcial { background:#fff3e0; color:#ef6c00; }
+  .sw.tr { background:repeating-linear-gradient(90deg,#c62828 0 6px,transparent 6px 10px); }
   .chip { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
   .aviso { background:#fff8e1; border:1px solid #ffe082; padding:6px 8px; border-radius:4px; margin:6px 0; }
   .ok { color:var(--verde); } .ruim { color:var(--vermelho); }
@@ -200,6 +145,8 @@ _MODELO = r"""<!DOCTYPE html>
   <div id="info">Clique em um módulo para ver suas dependências.</div>
   <h2>Ciclos encontrados</h2>
   <div id="listaCiclos"></div>
+  <h2>Simular remoção de dependência</h2>
+  <div id="listaRemocoes"></div>
   <h2>Componentes fortemente conexas</h2>
   <div id="listaScc"></div>
   <h2 id="tOrdem" style="display:none">Ordenação topológica</h2>
@@ -214,6 +161,7 @@ _MODELO = r"""<!DOCTYPE html>
     <span class="sw arco" style="background:#1565c0"></span><span>Dependências diretas do módulo selecionado</span>
     <span class="sw arco" style="background:#2e7d32"></span><span>Dependentes diretos do módulo selecionado</span>
     <span class="sw arco" style="background:#6a1b9a"></span><span>Alcançáveis a partir do módulo selecionado</span>
+    <span class="sw arco tr"></span><span>Dependência removida na simulação (tracejada)</span>
   </div>
   <div class="nota">Arco A → B: A importa B (A depende de B).</div>
 </div>
@@ -239,6 +187,8 @@ let modo = "grafo";            // "grafo" | "cond"
 let selecionado = null;
 let mostrarCiclo = false, mostrarRotulos = true;
 let cicloAtivo = null;         // índice do ciclo escolhido na lista
+let arcoSel = null;            // dependência [u, v] selecionada para simular a remoção
+let removendo = false;         // true = mostrando o grafo SEM a dependência selecionada
 let mostrarAlcance = false;    // destaca tudo que o módulo selecionado alcança
 let termoBusca = "";
 let destaque = null;          // conjunto de módulos destacado (clique numa SCC)
@@ -276,19 +226,23 @@ function criarVisao(nomeModo) {
 }
 
 // SCC de cada módulo, e se a componente é cíclica (tamanho > 1 ou laço)
-function infoScc() {
-  if (!DADOS.sccs) return null;
+function infoScc(sccs) {
+  if (!sccs) return null;
   const comp = new Map(), ciclica = [];
   const lacos = new Set(DADOS.arcos.filter(([u, v]) => u === v).map(a => a[0]));
-  DADOS.sccs.forEach((c, i) => {
+  sccs.forEach((c, i) => {
     c.forEach(v => comp.set(v, i));
     ciclica.push(c.length > 1 || (c.length === 1 && lacos.has(c[0])));
   });
   const cor = new Map(); let k = 0;
   ciclica.forEach((cic, i) => { if (cic) cor.set(i, PALETA[k++ % PALETA.length]); });
-  return {comp, ciclica, cor};
+  return {comp, ciclica, cor, lista: sccs};
 }
-const SCC = infoScc();
+const SCC_BASE = infoScc(DADOS.sccs);
+let SCC = SCC_BASE;      // troca temporariamente pelas SCCs "depois da remoção"
+
+const chaveArco = (u, v) => u + "\u0000" + v;
+const REMOCOES = new Map((DADOS.remocoes || []).map(r => [chaveArco(r.arco[0], r.arco[1]), r]));
 
 // ciclos: null = não calculados; [] = grafo acíclico
 const CICLOS = DADOS.ciclos || (DADOS.ciclo ? [DADOS.ciclo] : null);
@@ -376,7 +330,7 @@ function marcador(id, cor) {
 function prepararMarcadores() {
   defs.innerHTML = "";
   [["m-comum", COR_ARCO], ["m-ciclico", COR_CICLICO], ["m-saida", "#1565c0"],
-   ["m-entrada", "#2e7d32"], ["m-ciclo", "#ef6c00"], ["m-alcance", "#6a1b9a"]].forEach(([i, c]) => marcador(i, c));
+   ["m-entrada", "#2e7d32"], ["m-ciclo", "#ef6c00"], ["m-alcance", "#6a1b9a"], ["m-removido", "#c62828"]].forEach(([i, c]) => marcador(i, c));
 }
 
 function raioDe(n) { return modo === "cond" ? 11 + 3 * Math.sqrt(n.membros.length) : 8; }
@@ -443,9 +397,22 @@ function desenhar() {
     }
     if (cicloAtivo !== null && !arcoNoCiclo(a)) op = Math.min(op, 0.08);
     if (arcoNoCiclo(a)) { cor = "#ef6c00"; mk = "m-ciclo"; larg = 4; op = 1; }
+    let tracejado = null;
+    if (arcoSel && a.u === arcoSel[0] && a.v === arcoSel[1]) {
+      if (removendo) { cor = "#c62828"; mk = "m-removido"; larg = 2.4; op = 1; tracejado = "6 4"; }
+      else { cor = "#212121"; mk = "m-comum"; larg = 3.2; op = 1; }
+    }
     const inverso = chave.has(a.v + "\u0000" + a.u);
-    criar("path", {d: caminho(a, pos, inverso), fill: "none", stroke: cor, "stroke-width": larg,
-                   "stroke-opacity": op, "marker-end": `url(#${mk})`}, gArcos);
+    const forma = caminho(a, pos, inverso);
+    const atr = {d: forma, fill: "none", stroke: cor, "stroke-width": larg,
+                 "stroke-opacity": op, "marker-end": `url(#${mk})`};
+    if (tracejado) atr["stroke-dasharray"] = tracejado;
+    criar("path", atr, gArcos);
+    if (modo === "grafo" && SCC_BASE) {
+      const alvo = criar("path", {d: forma, fill: "none", stroke: "transparent", "stroke-width": 14,
+                                  "pointer-events": "stroke", style: "cursor:pointer"}, gArcos);
+      alvo.addEventListener("click", ev => { ev.stopPropagation(); selecionarArco(a.u, a.v); });
+    }
   });
 
   vz.nos.forEach(n => {
@@ -519,12 +486,55 @@ function ligarCliques(raiz) {
 }
 
 function selecionar(id) {
+  limparArco();
   selecionado = id; destaque = null; cicloAtivo = null; mostrarAlcance = false; desenhar(); atualizarInfo();
 }
 
+// ---------- simulação de remoção de dependência ----------
+function limparArco() { arcoSel = null; removendo = false; SCC = SCC_BASE; }
+
+function selecionarArco(u, v) {
+  limparArco();
+  arcoSel = [u, v]; selecionado = null; destaque = null; cicloAtivo = null; mostrarAlcance = false;
+  desenhar(); atualizarInfo();
+}
+
+function alternarRemocao() {
+  const r = REMOCOES.get(chaveArco(arcoSel[0], arcoSel[1]));
+  if (!r) return;
+  removendo = !removendo;
+  SCC = removendo ? infoScc(r.sccs_depois) : SCC_BASE;
+  desenhar(); atualizarInfo();
+}
+
+function infoArco() {
+  const caixa = el("info"), [u, v] = arcoSel, r = REMOCOES.get(chaveArco(u, v));
+  let html = `<div class="nome">${u} ➔ ${v}</div>`;
+  if (!r) {
+    html += `<div class="aviso">Este arco liga componentes diferentes: <b>não participa de nenhum ciclo</b>. Removê-lo não altera ciclos nem SCCs.</div>`;
+    caixa.innerHTML = html; return;
+  }
+  const ciclicos = new Set(r.pedacos_ciclicos.map(p => p.join("|")));
+  html += `<div class="sec">Remover esta dependência</div>`;
+  html += `<button id="bRemover" class="${removendo ? "ativo" : ""}">${removendo ? "Desfazer remoção" : "Aplicar remoção"}</button>`;
+  html += r.veredito === "elimina_todas"
+    ? `<div class="ok"><b>Eliminou todas as circularidades</b> da componente.</div>`
+    : `<div class="aviso"><b>Não eliminou todas as circularidades</b> da componente: ainda sobra ciclo.</div>`;
+  html += `<div class="sec">SCC afetada (${r.scc_afetada.length} módulo(s))</div>${ul(r.scc_afetada, true)}`;
+  html += `<div class="sec">Depois da remoção, ela ficou assim</div><ul>` + r.pedacos.map(p =>
+    `<li>${p.join(", ")} <i>(${ciclicos.has(p.join("|")) ? "cíclica" : "sem ciclo"})</i></li>`).join("") + "</ul>";
+  html += `<div class="sec">Ciclos que usavam esta dependência (${r.ciclos_que_usavam.length})</div>${ul(r.ciclos_que_usavam.map(c => c.join(" → ")), false)}`;
+  const mais = r.ciclos_restantes_truncado ? "+" : "";
+  html += `<div class="sec">Ciclos restantes (${r.ciclos_restantes.length}${mais})</div>${ul(r.ciclos_restantes.map(c => c.join(" → ")), false)}`;
+  if (r.deixaram.length) html += `<div class="sec">Deixaram de estar em ciclo</div>${ul(r.deixaram, true)}`;
+  caixa.innerHTML = html; ligarCliques(caixa);
+  const b = el("bRemover"); if (b) b.onclick = alternarRemocao;
+}
+
 function atualizarInfo() {
+  if (arcoSel) { infoArco(); return; }
   const caixa = el("info"), vz = visoes[modo];
-  if (!selecionado) { caixa.innerHTML = "Clique em um módulo para ver suas dependências."; return; }
+  if (!selecionado) { caixa.innerHTML = "Clique em um módulo para ver suas dependências, ou em uma seta para simular a remoção dela."; return; }
   const {saida, entrada} = indexar(vz.nos, vz.arcos.map(a => [a.u, a.v]));
   const alc = alcancaveis(saida, selecionado);
   let html = `<div class="nome">${selecionado}</div>`;
@@ -539,7 +549,7 @@ function atualizarInfo() {
   if (mostrarAlcance) html += ul([...alc].sort(), true);
   if (modo === "grafo" && SCC) {
     const i = SCC.comp.get(selecionado);
-    if (SCC.ciclica[i]) html += `<div class="ruim"><b>Pertence a uma componente cíclica</b> (SCC com ${DADOS.sccs[i].length} módulo(s)).</div>`;
+    if (SCC.ciclica[i]) html += `<div class="ruim"><b>Pertence a uma componente cíclica</b> (SCC com ${SCC.lista[i].length} módulo(s)).</div>`;
     else {
       const alcancaCiclica = [...alc].some(v => SCC.ciclica[SCC.comp.get(v)]);
       html += alcancaCiclica
@@ -554,6 +564,7 @@ function atualizarInfo() {
 
 function escolherCiclo(i) {
   if (modo !== "grafo") return;
+  limparArco();
   if (cicloAtivo === i) { cicloAtivo = null; destaque = null; desenhar(); atualizarInfo(); return; }
   cicloAtivo = i; selecionado = null; mostrarCiclo = false;
   el("bCiclo").classList.remove("ativo");
@@ -572,6 +583,20 @@ function preencherPainel() {
   if (!DADOS.condensacao) avisos.push("Condensação não disponível.");
   av.innerHTML = avisos.map(a => `<div class="aviso">${a}</div>`).join("");
   el("bCond").disabled = !DADOS.condensacao;
+
+  const lr = el("listaRemocoes");
+  if (!DADOS.remocoes) lr.innerHTML = "<i>indisponível (precisa das SCCs)</i>";
+  else if (!DADOS.remocoes.length) lr.innerHTML = "Nenhuma dependência dentro de ciclos para simular.";
+  else {
+    let h = `Clique numa seta do grafo ou escolha uma das ${DADOS.remocoes.length}${DADOS.remocoes_truncado ? "+" : ""} dependência(s) que estão dentro de ciclos:`;
+    if (DADOS.remocoes_truncado) h += " (lista limitada)";
+    h += "<ul>" + DADOS.remocoes.map((r, i) => `<li class="clicavel" data-remocao="${i}">${r.arco[0]} ➔ ${r.arco[1]}<span class="tag ${r.veredito === "elimina_todas" ? "elimina" : "parcial"}">${r.veredito === "elimina_todas" ? "elimina" : "parcial"}</span></li>`).join("") + "</ul>";
+    lr.innerHTML = h;
+    lr.querySelectorAll("li[data-remocao]").forEach(li => li.addEventListener("click", () => {
+      if (modo !== "grafo") return;
+      const r = DADOS.remocoes[+li.dataset.remocao]; selecionarArco(r.arco[0], r.arco[1]);
+    }));
+  }
   el("bCiclo").disabled = !CICLOS || CICLOS.length === 0;
 
   const lc = el("listaCiclos");
@@ -595,6 +620,7 @@ function preencherPainel() {
     h += "<ul>" + cicl.map(({c, i}) => `<li class="clicavel" data-scc="${i}"><span class="chip" style="background:${SCC.cor.get(i)}"></span>${c.length} módulo(s): ${c.join(", ")}</li>`).join("") + "</ul>";
     ls.innerHTML = h;
     ls.querySelectorAll("li[data-scc]").forEach(li => li.addEventListener("click", () => {
+      limparArco();
       termoBusca = ""; el("busca").value = ""; selecionado = null; cicloAtivo = null;
       destaque = new Set(DADOS.sccs[+li.dataset.scc]); desenhar(); atualizarInfo();
     }));
@@ -608,6 +634,7 @@ function preencherPainel() {
 
 // ---------- botões ----------
 function trocarModo(m) {
+  limparArco();
   modo = m; selecionado = null; cicloAtivo = null; destaque = null; mostrarAlcance = false;
   el("bGrafo").classList.toggle("ativo", m === "grafo");
   el("bCond").classList.toggle("ativo", m === "cond");
@@ -625,6 +652,7 @@ function iniciarVisao(m) {
 el("bGrafo").onclick = () => trocarModo("grafo");
 el("bCond").onclick = () => { if (DADOS.condensacao) trocarModo("cond"); };
 el("bCiclo").onclick = () => {
+  limparArco();
   mostrarCiclo = !mostrarCiclo; cicloAtivo = null; destaque = null;
   el("bCiclo").classList.toggle("ativo", mostrarCiclo); desenhar(); atualizarInfo();
 };

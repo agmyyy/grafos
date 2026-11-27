@@ -2,6 +2,7 @@ import json
 import re
 
 from src.grafo import Digrafo
+from src.remocao import simular_remocoes_internas
 from src.visualizacao import gerar_html, montar_dados
 
 
@@ -57,3 +58,16 @@ def test_um_ciclo_vira_lista_e_aciclico_e_lista_vazia():
     assert montar_dados(g, "x", ciclo=["a", "b", "a"])["ciclos"] == [["a", "b", "a"]]
     assert montar_dados(g, "x", ciclos=[])["ciclos"] == []
     assert montar_dados(g, "x")["ciclos"] is None
+
+
+def test_dados_com_remocoes_simuladas():
+    g = Digrafo({"a": {"b"}, "b": {"a"}})
+    resultados, _ = simular_remocoes_internas(g)
+    d = montar_dados(g, "x", remocoes=resultados, remocoes_truncado=False)
+    assert [r["arco"] for r in d["remocoes"]] == [["a", "b"], ["b", "a"]]
+    primeiro = d["remocoes"][0]
+    assert primeiro["veredito"] == "elimina_todas"
+    assert sorted(primeiro["sccs_depois"]) == [["a"], ["b"]]   # a ordem das SCCs não importa aqui
+    assert primeiro["ciclos_restantes"] == [] and primeiro["deixaram"] == ["a", "b"]
+    json.dumps(d)                                   # precisa ser serializável para a página
+    assert montar_dados(g, "x")["remocoes"] is None
